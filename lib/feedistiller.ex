@@ -1,16 +1,51 @@
 defmodule Feedistiller.Limits do
+  @moduledoc """
+  Limits on the number of items to retrieve and the date range of items.
+
+  - `from:` only items newer than this date are retrieved (default is `:oldest` for no limit)
+  - `to:` only items older than this date are retrieved (default is `:latest` for not limit)
+  - `max:` maximum number of items to retrieve (default is `:unlimited` for no limit) 
+  """
+
   defstruct from: :oldest, to: :latest, max: :unlimited
-  @type t :: %__MODULE__{from: Timex.DateTime | :oldest, to: Timex.DateTime | :latest, max: integer | :unlimited}
+  @type t :: %__MODULE__{from: Timex.DateTime.t | :oldest, to: Timex.DateTime.t | :latest, max: integer | :unlimited}
 end
 
 defmodule Feedistiller.Filters do
+  @moduledoc """
+  Filters applied to retrieved items.
+
+  - `limits:` a `Limits` struct for date/number limits
+  - `mime:` a list of `Regex` applied to the `content-type` of enclosures
+  - `name:` a list of Regex applied to the `title` of feed items
+  """
+
   defstruct limits: %Feedistiller.Limits{}, mime: [], name: []
-  @type t :: %__MODULE__{limits: Feedistiller.Limits.t, mime: List.t, name: List.t}
+  @type t :: %__MODULE__{limits: Feedistiller.Limits.t, mime: [Regex.t], name: [Regex.t]}
 end
 
 defmodule Feedistiller.FeedAttributes do
+  @moduledoc """
+  The attributes of a feed to download.
+
+  - `url:` web address of the feed
+  - `destination:` the directory where to put the downloaded items (they will be put in a subdirectory
+    with the same name as the feed). Default is `.` (current directory)
+  - `max_simultaneous_downloads:` the maximum number of item to download at the same time (default is 3)
+  - `filters:` the filters applied to the feed
+  """
+
   defstruct url: "", filters: %Feedistiller.Filters{}, destination: ".", max_simultaneous_downloads: 3
   @type t :: %__MODULE__{url: String.t, filters: Filters.t, destination: String.t}
+end
+
+defmodule Feedistiller.Event do
+  @moduledoc """
+  Events reported by the downloaders.
+  """
+
+  defstruct destination: "", entry: %FeederEx.Entry{}, event: nil
+  @type t :: %__MODULE__{destination: String.t, entry: FeederEx.Entry.t, event: nil | tuple}
 end
 
 defmodule Feedistiller do
@@ -30,15 +65,15 @@ defmodule Feedistiller do
   
   @vsn 1
   
-  require Logger
   alias Feedistiller.FeedAttributes
+  alias Feedistiller.Event
   alias Feedistiller.Http
   alias Alambic.Semaphore
   alias Alambic.CountDown
 
   @doc "Download a set of feeds according to their settings."
   @spec download_feeds(list(FeedAttributes.t)) :: :ok
-  def download_feeds(feeds) when is_map(feeds) when is_list(feeds)
+  def download_feeds(feeds) when is_list(feeds)
   do
     download_feeds(feeds, nil)
   end
@@ -95,14 +130,33 @@ defmodule Feedistiller do
     case feed do
       %FeedAttributes{url: url, filters: filters, destination: destination, max_simultaneous_downloads: max_simultaneous} ->
         # Check we can write to destination
-        :ok = File.mkdir_p(destination)
+        try do
+          :ok = File.mkdir_p(destination)
+        rescue
+          e ->
+            GenEvent.ack_notify(Feedistiller.Reporter, %Event{event: {:error_destination, destination}})
+            raise e
+        end
 
         # Download feed and parse it
-        {:ok, feed, _} = FeederEx.parse(Http.full_get!(url))
+        feed = try do
+          {:ok, feed, _} = FeederEx.parse(Http.full_get!(url))
+          feed
+        rescue
+          e -> 
+            GenEvent.ack_notify(Feedistiller.Reporter, %Event{event: {:bad_url, url}})
+            raise e
+        end
 
         # Prepare destination
         destination = Path.join(destination, feed.title)
-        :ok = File.mkdir_p(destination)
+        try do
+          :ok = File.mkdir_p(destination)
+        rescue
+          e -> 
+            GenEvent.ack_notify(Feedistiller.Reporter, %Event{event: {:error_destination, destination}})
+            raise e
+        end
 
         # Filter feed entries
         entries = feed.entries
@@ -151,13 +205,9 @@ defmodule Feedistiller do
   defp get_enclosure(entry, destination, gsem, lsem, countdown) do
     sem_acquire(gsem)
     spawn_link(fn () -> 
-      feedback = "Beginning download for #{entry.title} (url: #{entry.enclosure.url}, size: #{entry.enclosure.size} bytes)"
       filename = Path.join(destination, entry.title <> Path.extname(entry.enclosure.url))
-      Logger.info "#{feedback}. Saving file to #{filename}."
-      case get_enclosure(filename, entry.enclosure.url, String.to_integer(entry.enclosure.size)) do
-        :ok -> Logger.info("#{filename} downloaded succesfully.")
-        error -> Logger.error("Error while downloading #{filename} at #{entry.enclosure.url}: #{inspect error}")
-      end
+      GenEvent.ack_notify(Feedistiller.Reporter, %Feedistiller.Event{destination: destination, entry: entry, event: {:begin, filename}})
+      get_enclosure(filename, entry)
       sem_release(gsem)
       sem_release(lsem)
       Alambic.CountDown.signal(countdown)
@@ -165,27 +215,27 @@ defmodule Feedistiller do
   end
 
   # Fetch an enclosure and save it
-  defp get_enclosure(filename, url, size) do
+  defp get_enclosure(filename, entry) do
+    event = %Event{destination: Path.dirname(filename), entry: entry}
     case File.open(filename, [:write]) do
       {:ok, file} ->
         try do
           {:ok, written} = Http.stream_get!(
-            url,
+            entry.enclosure.url,
             fn chunk, current_size ->
               :ok = IO.binwrite(file, chunk)
-              current_size + byte_size(chunk)
+              s = current_size + byte_size(chunk)
+              GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:write, filename, s}})
+              s
             end,
             0)
-          case written do
-            ^size -> :ok
-            _ -> {:error, {:bad_size, [received: written, expected: size]}}
-          end
+          GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:finish_write, filename, written}})
         rescue
-          e -> e
+          e -> GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:error_write, filename, 0, e}})
         after
           File.close(file)
         end
-      e -> e
+      e -> GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:error_write, filename, 0, e}})
     end
   end
 

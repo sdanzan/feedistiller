@@ -1,10 +1,15 @@
 defmodule Feedistiller.Mixfile do
   use Mix.Project
 
+  @description "Download RSS/Atom feeds enclosures."
+
   def project do
     [app: :feedistiller,
      version: "0.0.1",
+     description: @description,
+     package: package,
      elixir: "~> 1.1",
+     escript: escript_config,
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
      deps: deps]
@@ -14,7 +19,8 @@ defmodule Feedistiller.Mixfile do
   #
   # Type "mix help compile.app" for more information
   def application do
-    [applications: [:logger, :httpoison, :feeder_ex, :tzdata]]
+    [applications: [:logger, :tzdata, :httpoison, :feeder_ex],
+     mod: {Feedistiller.Supervisor, []}]
   end
 
   # Dependencies can be Hex packages:
@@ -28,10 +34,22 @@ defmodule Feedistiller.Mixfile do
   # Type "mix help deps" for more examples and options
   defp deps do
     [
-      {:alambic, git: "https://github.com/sdanzan/alambic.git", branch: "master"},
+      {:alambic, "~> 0.0.1"},
       {:httpoison, "~> 0.7.2"},
       {:feeder_ex, "~> 0.0.2"},
       {:timex, "~> 0.19.5"}
     ]
+  end
+
+  # Main
+  defp escript_config do
+    [main_module: Feedistiller.CLI]
+  end
+
+  # Package
+  defp package do
+    [maintainers: ["Serge Danzanvilliers"],
+     licenses: ["Apache 2.0"],
+     links: %{"Github" => "https://github.com/sdanzan/feedistiller"}]
   end
 end

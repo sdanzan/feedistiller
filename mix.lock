@@ -1,4 +1,4 @@
-%{"alambic": {:git, "https://github.com/sdanzan/alambic.git", "6bf76ad0bca0bcc1d81eaf21ec623593b35a9251", [branch: "master"]},
+%{"alambic": {:hex, :alambic, "0.0.1"},
   "combine": {:hex, :combine, "0.5.2"},
   "feeder": {:hex, :feeder, "1.4.7"},
   "feeder_ex": {:hex, :feeder_ex, "0.0.2"},
