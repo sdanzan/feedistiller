@@ -1,7 +1,7 @@
 # Feedistiller [![Build Status](https://travis-ci.org/sdanzan/feedistiller.svg?branch=master)](https://travis-ci.org/sdanzan/feedistiller)
 
 
-Provides functions to downloads enclosures of rss/atom feeds.
+Provides functions to download enclosures of rss/atom feeds.
 
 ## Features:
 - download multiple feeds at once and limit the number of downloads

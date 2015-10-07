@@ -34,7 +34,7 @@ defmodule Feedistiller.Reporter do
                 end
                 state
               end)
-            {:error_write, _filename, written} ->
+            {:error_write, _filename, written, _exception} ->
               Agent.cast(Reported, fn state -> 
                 %{state | 
                   errors: state.errors + 1,
