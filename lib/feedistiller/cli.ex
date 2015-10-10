@@ -3,7 +3,7 @@ defmodule Feedistiller.CLI do
   Command line interface for Feedistiller.
   """
   
-  @vsn 1
+  @vsn 2
 
   alias Feedistiller.Limits
   alias Feedistiller.FeedAttributes
@@ -39,6 +39,8 @@ defmodule Feedistiller.CLI do
                        given REG regular expression. 
   --filter-content-type REG : only files with content type matching this regular 
                         expression will be downloaded.
+  --user             : user for password protected feeds
+  --password         : password for password protected feeds
   """
 
   @doc "Entry point"
@@ -154,6 +156,10 @@ defmodule Feedistiller.CLI do
         %{attr | filters: %{attr.filters | mime: [Regex.compile!(filter) | attr.filters.mime]}}
       {:filter_name, filter} ->
         %{attr | filters: %{attr.filters | name: [Regex.compile!(filter) | attr.filters.name]}}
+      {:user, user} ->
+        %{attr | user: user}
+      {:password, password} ->
+        %{attr | password: password}
       _ -> attr
     end
     parse_feed_attributes({left_options, attributes})
@@ -178,6 +184,8 @@ defmodule Feedistiller.CLI do
       max: :keep,
       filter_content_type: :keep,
       filter_name: :keep,
+      user: :keep,
+      password: :keep,
       help: :boolean
     ]
   end
@@ -191,6 +199,8 @@ defmodule Feedistiller.CLI do
       M: :max_date,
       c: :content_type,
       n: :name,
+      u: :user,
+      p: :password,
       h: :help
     ]
   end

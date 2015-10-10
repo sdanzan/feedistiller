@@ -29,7 +29,8 @@ functions. See the source code for some example.
                           
 **TODO**
 - More filtering options
-- password protected feeds
+- More authentication options
+- asynchronous parsing for big feeds (with 1000s of items)
 - tests
 - **Note:** escript.build does not currently work due to the way `tzdata` handles
   its embeded data (see: https://github.com/bitwalker/timex/issues/86). You must

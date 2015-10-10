@@ -6,6 +6,7 @@ defmodule Feedistiller.Limits do
   - `to:` only items older than this date are retrieved (default is `:latest` for not limit)
   - `max:` maximum number of items to retrieve (default is `:unlimited` for no limit) 
   """
+  @vsn 1
 
   defstruct from: :oldest, to: :latest, max: :unlimited
   @type t :: %__MODULE__{from: Timex.DateTime.t | :oldest, to: Timex.DateTime.t | :latest, max: integer | :unlimited}
@@ -19,6 +20,7 @@ defmodule Feedistiller.Filters do
   - `mime:` a list of `Regex` applied to the `content-type` of enclosures
   - `name:` a list of Regex applied to the `title` of feed items
   """
+  @vsn 1
 
   defstruct limits: %Feedistiller.Limits{}, mime: [], name: []
   @type t :: %__MODULE__{limits: Feedistiller.Limits.t, mime: [Regex.t], name: [Regex.t]}
@@ -29,20 +31,24 @@ defmodule Feedistiller.FeedAttributes do
   The attributes of a feed to download.
 
   - `url:` web address of the feed
+  - `user:` user for protected feed
+  - `password:` password for protected feed
   - `destination:` the directory where to put the downloaded items (they will be put in a subdirectory
     with the same name as the feed). Default is `.` (current directory)
   - `max_simultaneous_downloads:` the maximum number of item to download at the same time (default is 3)
   - `filters:` the filters applied to the feed
   """
+  @vsn 1
 
-  defstruct url: "", filters: %Feedistiller.Filters{}, destination: ".", max_simultaneous_downloads: 3
-  @type t :: %__MODULE__{url: String.t, filters: Filters.t, destination: String.t}
+  defstruct url: "", filters: %Feedistiller.Filters{}, destination: ".", max_simultaneous_downloads: 3, user: "", password: ""
+  @type t :: %__MODULE__{url: String.t, filters: Filters.t, destination: String.t, user: String.t, password: String.t}
 end
 
 defmodule Feedistiller.Event do
   @moduledoc """
   Events reported by the downloaders.
   """
+  @vsn 1
 
   defstruct destination: "", entry: %FeederEx.Entry{}, event: nil
   @type t :: %__MODULE__{destination: String.t, entry: FeederEx.Entry.t, event: nil | tuple}
@@ -62,8 +68,7 @@ defmodule Feedistiller do
   
   `HTTPoison` must be started to use `Feedistiller` functions.
   """
-  
-  @vsn 1
+  @vsn 2
   
   alias Feedistiller.FeedAttributes
   alias Feedistiller.Event
@@ -128,7 +133,9 @@ defmodule Feedistiller do
   when is_map(feed) and (is_map(global_sem) or is_nil(global_sem))
   do
     case feed do
-      %FeedAttributes{url: url, filters: filters, destination: destination, max_simultaneous_downloads: max_simultaneous} ->
+      %FeedAttributes{url: url, filters: filters, destination: destination,
+                      max_simultaneous_downloads: max_simultaneous,
+                      user: user, password: password} ->
         # Check we can write to destination
         try do
           :ok = File.mkdir_p(destination)
@@ -140,7 +147,7 @@ defmodule Feedistiller do
 
         # Download feed and parse it
         feed = try do
-          {:ok, feed, _} = FeederEx.parse(Http.full_get!(url))
+          {:ok, feed, _} = FeederEx.parse(Http.full_get!(url, user, password))
           feed
         rescue
           e -> 

@@ -3,15 +3,19 @@ defmodule Feedistiller.Http do
   HTTP wrappers to get feed content.
   """
   
-  @vsn 1
+  @vsn 2
   
   @doc """
   Synchronous get returning the full response body. Redirection is
   handled automatically.
   """
-  @spec full_get!(String.t) :: binary
-  def full_get!(url) do
-    %HTTPoison.Response{body: body} = HTTPoison.get! url, [], [hackney: [follow_redirect: true]]
+  @spec full_get!(String.t, String.t, String.t) :: binary
+  def full_get!(url, user, password) do
+    hackney = [follow_redirect: true]
+    if user != "" or password != "" do
+      hackney = [basic_auth: {user, password}] ++ hackney
+    end
+    %HTTPoison.Response{body: body} = HTTPoison.get!(url, [], [hackney: hackney])
     body
   end
 
@@ -39,7 +43,7 @@ defmodule Feedistiller.Http do
   def stream_get!(url, process_chunk, state, max_redirect)
   when is_integer(max_redirect) and max_redirect >= 0
   do
-    HTTPoison.get! url, [], [stream_to: self, hackney: [follow_redirect: true]]
+    HTTPoison.get!(url, [], [stream_to: self, hackney: [follow_redirect: true]])
     stream_get_loop!(process_chunk, state, max_redirect)
   end
 

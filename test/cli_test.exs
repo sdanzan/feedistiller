@@ -21,7 +21,7 @@ defmodule Feedistiller.CLI.Test do
 
   test "parse some options" do
     options = [ "--max-download", "14", "--destination", "destination", "--max", "15",
-                "--feed-url", "url-1", "--max", "3", "--max-download", "2",
+                "--feed-url", "url-1", "--max", "3", "--max-download", "2", "--user", "Bilbo", "--password", "SauronSux", 
                 "--feed-url", "url-2", "--destination", "destination-2", "--filter-content-type", "^audio", "--max", "unlimited",
                 "--feed-url", "url-3", "--filter-name", "foo", "--min-date", "2015-12-12 12:12:12", "--filter-name", "bar", "--max-date", "2015-12-13 13:13:13",
               ]
@@ -30,6 +30,9 @@ defmodule Feedistiller.CLI.Test do
 
     assert g.destination == Path.expand("destination")
     assert g.max_simultaneous_downloads == 14
+    assert g.url == ""
+    assert g.user == ""
+    assert g.password == ""
     
     [f3, f2, f1] = feeds
 
@@ -41,6 +44,8 @@ defmodule Feedistiller.CLI.Test do
     assert f1.filters.limits.to == :latest
     assert f1.filters.mime == []
     assert f1.filters.name == []
+    assert f1.user == "Bilbo"
+    assert f1.password == "SauronSux"
 
     assert f2.url == "url-2"
     assert f2.destination == Path.expand("destination-2")
