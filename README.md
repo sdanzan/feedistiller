@@ -1,11 +1,12 @@
 # Feedistiller [![Build Status](https://travis-ci.org/sdanzan/feedistiller.svg?branch=master)](https://travis-ci.org/sdanzan/feedistiller)
 
-
 Provides functions to download enclosures of rss/atom feeds.
 
 ## Features:
+
 - download multiple feeds at once and limit the number of downloads
   occurring at the same (globally or on per feed basis).
+- limited support for authenticated feeds (http basic auth)
 - various filtering options:
   - content-type criteria
   - item name criteria
@@ -27,13 +28,16 @@ Feedistiller can be embeded as an application in your projects. Just ensure the
 You can activate console or logger logging via the `Feedistiller.Reporter.log_to_console/log_to_logger`
 functions. See the source code for some example.
                           
-**TODO**
+## TODO
+
 - More filtering options
 - More authentication options
-- asynchronous parsing for big feeds (with 1000s of items)
-- tests
+- Asynchronous parsing for big feeds (with 1000s of items)
+- Persistency
+- tests (currenlty tests are done in the REPL against a few feeds and are not
+  committed in the repo)
 - **Note:** escript.build does not currently work due to the way `tzdata` handles
-  its embeded data (see: https://github.com/bitwalker/timex/issues/86). You must
+  its embedded data (see: https://github.com/bitwalker/timex/issues/86). You must
   use the `feedistiller.exs` script instead.
 
 `Feedistiller` makes use of `HTTPoison`, `FeederEx` and `Timex`.
@@ -59,7 +63,7 @@ If [available in Hex](https://hex.pm/docs/publish), the package can be installed
   1. Add feedistiller to your list of dependencies in `mix.exs`:
 
         def deps do
-          [{:feedistiller, "~> 0.0.1"}]
+          [{:feedistiller, "~> 0.0.2"}]
         end
 
   2. Ensure alambic is started before your application:
