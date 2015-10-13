@@ -38,6 +38,7 @@ defmodule Feedistiller.Mixfile do
       {:httpoison, "~> 0.7.2"},
       {:feeder_ex, "~> 0.0.2"},
       {:timex, "~> 0.19.5"},
+      {:tzdata, "== 0.1.8", override: true},
       {:earmark, "~> 0.1.17", only: :docs},
       {:ex_doc, "~> 0.10.0", only: :docs},
     ]

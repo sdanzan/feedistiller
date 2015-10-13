@@ -6,4 +6,5 @@ erl_crash.dump
 *.ez
 *.swp
 url.txt
+feedistiller
 /feeds/
