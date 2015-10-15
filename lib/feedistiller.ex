@@ -1,3 +1,17 @@
+# Copyright 2015 Serge Danzanvilliers <serge.danzanvilliers@gmail.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 defmodule Feedistiller.Limits do
   @moduledoc """
   Limits on the number of items to retrieve and the date range of items.
@@ -40,8 +54,9 @@ defmodule Feedistiller.FeedAttributes do
   """
   @vsn 1
 
-  defstruct url: "", filters: %Feedistiller.Filters{}, destination: ".", max_simultaneous_downloads: 3, user: "", password: ""
-  @type t :: %__MODULE__{url: String.t, filters: Filters.t, destination: String.t, user: String.t, password: String.t}
+  defstruct name: "", url: "", filters: %Feedistiller.Filters{}, destination: ".", max_simultaneous_downloads: 3, user: "", password: ""
+  @type t :: %__MODULE__{name: String.t, url: String.t, filters: Filters.t, destination: String.t,
+                         max_simultaneous_downloads: :unlimited | integer, user: String.t, password: String.t}
 end
 
 defmodule Feedistiller.Event do
@@ -50,8 +65,8 @@ defmodule Feedistiller.Event do
   """
   @vsn 1
 
-  defstruct destination: "", entry: %FeederEx.Entry{}, event: nil
-  @type t :: %__MODULE__{destination: String.t, entry: FeederEx.Entry.t, event: nil | tuple}
+  defstruct destination: "", entry: %Feedistiller.Feeder.Entry{}, event: nil
+  @type t :: %__MODULE__{destination: String.t, entry: Feedistiller.Feeder.Entry.t, event: nil | tuple}
 end
 
 defmodule Feedistiller do
@@ -73,8 +88,10 @@ defmodule Feedistiller do
   alias Feedistiller.FeedAttributes
   alias Feedistiller.Event
   alias Feedistiller.Http
+  alias Feedistiller.Feeder
   alias Alambic.Semaphore
   alias Alambic.CountDown
+  alias Alambic.BlockingQueue
 
   @doc "Download a set of feeds according to their settings."
   @spec download_feeds(list(FeedAttributes.t)) :: :ok
@@ -133,10 +150,11 @@ defmodule Feedistiller do
   when is_map(feed) and (is_map(global_sem) or is_nil(global_sem))
   do
     case feed do
-      %FeedAttributes{url: url, filters: filters, destination: destination,
+      %FeedAttributes{name: name, url: url, filters: filters, destination: destination,
                       max_simultaneous_downloads: max_simultaneous,
                       user: user, password: password} ->
         # Check we can write to destination
+        destination = Path.join(destination, name) |> Path.expand
         try do
           :ok = File.mkdir_p(destination)
         rescue
@@ -145,28 +163,18 @@ defmodule Feedistiller do
             raise e
         end
 
-        # Download feed and parse it
-        feed = try do
-          {:ok, feed, _} = FeederEx.parse(Http.full_get!(url, user, password))
-          feed
-        rescue
-          e -> 
-            GenEvent.ack_notify(Feedistiller.Reporter, %Event{event: {:bad_url, url}})
-            raise e
-        end
+        chunks = BlockingQueue.create(10)
+        entries = BlockingQueue.create(10)
+        semaphores = [global_sem: global_sem, local_sem: get_sem(max_simultaneous)]
 
-        # Prepare destination
-        destination = Path.join(destination, feed.title)
-        try do
-          :ok = File.mkdir_p(destination)
-        rescue
-          e -> 
-            GenEvent.ack_notify(Feedistiller.Reporter, %Event{event: {:error_destination, destination}})
-            raise e
-        end
+        # Download feed and gather chunks in a shared queue
+        spawn_link(fn -> generate_chunks_stream(chunks, url, user, password, semaphores) end)
+
+        # Parse the feed and stream it to the entry queue
+        spawn_link(fn -> generate_entries_stream(entries, chunks, url) end)
 
         # Filter feed entries
-        entries = feed.entries
+        entries = entries
                   |> Stream.filter(fn e -> !is_nil(e.enclosure) end)
                   |> Stream.filter(&filter_feed_entry(&1, {filters.limits.from, filters.limits.to}))
         entries = Enum.reduce(filters.mime, entries,
@@ -178,21 +186,76 @@ defmodule Feedistiller do
         end
         
         # and get all!
-        get_enclosures(entries, destination, global_sem, max_simultaneous)
+        get_enclosures(entries, destination, user, password, semaphores)
 
       _ ->
         {:error, "Feedistiller.FeedAttributes parameter expected"}
     end
   end
 
+  defp generate_chunks_stream(chunks, url, user, password, semaphores) do
+    try do
+      acquire(semaphores)
+      Http.stream_get!(url,
+        fn (chunk, chunks) ->
+          :ok = BlockingQueue.enqueue(chunks, chunk)
+          chunks
+        end,
+        chunks, user, password)
+    rescue
+      e ->
+        GenEvent.ack_notify(Feedistiller.Reporter, %Event{event: {:bad_url, url}})
+        raise e
+    after
+      BlockingQueue.complete(chunks)
+      release(semaphores)
+    end
+  end
+
+  defp generate_entries_stream(entries, chunks, url) do
+    try do
+      case BlockingQueue.dequeue(chunks) do
+        {:ok, start_data} ->
+          Feeder.stream(
+            start_data,
+            [
+              event_state: entries,
+              event_fun: fn
+                (:endFeed, entries) ->
+                  BlockingQueue.complete(entries)
+                  entries 
+                (entry = %Feeder.Entry{}, entries) -> 
+                  BlockingQueue.enqueue(entries, entry)
+                  entries
+                (_, entries) -> entries
+              end,
+              continuation_state: chunks,
+              continuation_fun: fn chunks ->
+                case BlockinQueue.dequeue(chunks) do
+                  {:ok, chunk} -> {chunk, chunks}
+                  state ->
+                    if state == :error do
+                      GenEvent.ack_notify(Feedistiller.Reporter, %Event{event: {:bad_feed, url}})
+                    end
+                    BlockingQueue.complete(entries)
+                    {"", chunks}
+                end
+              end
+            ])
+        _ -> nil
+      end
+    after
+      BlockingQueue.complete(entries)
+    end
+  end
+
   # Filter a feed entry according to date limits
   defp filter_feed_entry(entry, dates) do
-    entry_date = entry.updated |> Timex.DateFormat.parse("{RFC1123}")
     case dates do
       {:oldest, :latest} -> true
-      {:oldest, to} -> Timex.Date.compare(entry_date, to) <= 0
-      {from, :latest} -> Timex.Date.compare(entry_date, from) >= 0
-      {from, to} -> Timex.Date.compare(entry_date, to) <= 0 and Timex.Date.compare(entry_date, from) >= 0
+      {:oldest, to} -> Timex.Date.compare(entry.updated, to) <= 0
+      {from, :latest} -> Timex.Date.compare(entry.updated, from) >= 0
+      {from, to} -> Timex.Date.compare(entry.updated, to) <= 0 and Timex.Date.compare(entry.updated, from) >= 0
     end
   end
 
@@ -208,21 +271,31 @@ defmodule Feedistiller do
     end
   end
 
-  # Download one enclosure
-  defp get_enclosure(entry, destination, gsem, lsem, countdown) do
+  defp acquire([global_sem: gsem, local_sem: lsem]) do
     sem_acquire(gsem)
+    sem_acquire(lsem)
+  end
+
+  defp release([global_sem: gsem, local_sem: lsem]) do
+    sem_release(lsem)
+    sem_release(gsem)
+  end
+
+  # Download one enclosure
+  defp get_enclosure(entry, destination, user, password, semaphores, countdown) do
+    acquire(semaphores)
+    CountDown.increase(countdown)
     spawn_link(fn () -> 
-      filename = Path.join(destination, entry.title <> Path.extname(entry.enclosure.url))
+      filename = Path.join(destination, String.replace(entry.title, ~r/\/|\\/, "|") <> Path.extname(entry.enclosure.url))
       GenEvent.ack_notify(Feedistiller.Reporter, %Feedistiller.Event{destination: destination, entry: entry, event: {:begin, filename}})
-      get_enclosure(filename, entry)
-      sem_release(gsem)
-      sem_release(lsem)
-      Alambic.CountDown.signal(countdown)
+      get_enclosure(filename, entry, user, password)
+      CountDown.signal(countdown)
+      release(semaphores)
     end)
   end
 
   # Fetch an enclosure and save it
-  defp get_enclosure(filename, entry) do
+  defp get_enclosure(filename, entry, user, password) do
     event = %Event{destination: Path.dirname(filename), entry: entry}
     case File.open(filename, [:write]) do
       {:ok, file} ->
@@ -235,7 +308,8 @@ defmodule Feedistiller do
               GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:write, filename, s}})
               s
             end,
-            0)
+            0,
+            user, password)
           GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:finish_write, filename, written}})
         rescue
           e -> GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:error_write, filename, 0, e}})
@@ -247,17 +321,12 @@ defmodule Feedistiller do
   end
 
   # Retrieve all enclosures
-  defp get_enclosures(entries, destination, gsem, max) do
-    max_sem = get_sem(max)
+  defp get_enclosures(entries, destination, user, password, semaphores) do
     countdown = CountDown.create_link(0)
-	  entries |> Enum.each(# fetch all enclosures, up to 'max' at the same time
-            fn entry ->
-              sem_acquire(max_sem)
-              CountDown.increase(countdown)
-              get_enclosure(entry, destination, gsem, max_sem, countdown)
-            end)      
+    entries |> Enum.each(# fetch all enclosures, up to 'max' at the same time
+      fn entry -> get_enclosure(entry, destination, user, password, semaphores, countdown) end)      
     CountDown.wait(countdown)
-    clean(max_sem, countdown)
+    CountDown.destroy(countdown)
   end
   
   defp get_sem(max) do
@@ -265,10 +334,5 @@ defmodule Feedistiller do
       :unlimited -> nil
       _ -> Alambic.Semaphore.create(max)
     end
-  end
-  
-  defp clean(sem, cd) do
-    if !is_nil(sem), do: Alambic.Semaphore.destroy(sem)
-    Alambic.CountDown.destroy(cd)
   end
 end

@@ -5,7 +5,7 @@ defmodule Feedistiller.Mixfile do
 
   def project do
     [app: :feedistiller,
-     version: "0.0.2",
+     version: "0.1.0",
      description: @description,
      package: package,
      elixir: "~> 1.1",
@@ -34,13 +34,13 @@ defmodule Feedistiller.Mixfile do
   # Type "mix help deps" for more examples and options
   defp deps do
     [
-      {:alambic, "~> 0.0.1"},
+      {:alambic, "~> 0.1.0"},
       {:httpoison, "~> 0.7.2"},
-      {:feeder_ex, "~> 0.0.2"},
       {:timex, "~> 0.19.5"},
       {:tzdata, "== 0.1.8", override: true},
       {:earmark, "~> 0.1.17", only: :docs},
       {:ex_doc, "~> 0.10.0", only: :docs},
+      {:rss, "~> 0.2.1", only: :test},
     ]
   end
 

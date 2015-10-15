@@ -1,9 +1,23 @@
+# Copyright 2015 Serge Danzanvilliers <serge.danzanvilliers@gmail.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 defmodule Feedistiller.CLI do
   @moduledoc """
   Command line interface for Feedistiller.
   """
   
-  @vsn 2
+  @vsn 3
 
   alias Feedistiller.Limits
   alias Feedistiller.FeedAttributes
@@ -18,6 +32,8 @@ defmodule Feedistiller.CLI do
 
   --feed-url URL     : feed url to get enclosures from, you may pass as much as
                        'feed-url' options as you want.
+  
+  --name NAME        : name of the feed. This is used as subdirectory in destination.                     
 
   --destination DEST : root directory to put downloaded files. they will be put
                        in a subdirectory bearing the feed name.
@@ -115,6 +131,7 @@ defmodule Feedistiller.CLI do
 
   defp parse_feeds_config([{:feed_url, url} | options], global, feeds) do
     feed = %FeedAttributes{
+      name: global.name,
       url: url,
       destination: global.destination,
       filters: %{
@@ -142,6 +159,8 @@ defmodule Feedistiller.CLI do
     attributes = case option do
       {:destination, destination} -> 
         %{attr | destination: Path.expand(destination)}
+      {:name, name} ->
+        %{attr | name: name}
       {:max_download, max} -> 
         %{attr | max_simultaneous_downloads: String.to_integer(max)}
       {:min_date, date} ->
@@ -176,6 +195,7 @@ defmodule Feedistiller.CLI do
 
   defp switches do
     [
+      name: :keep,
       destination: :keep,
       feed_url: :keep,
       max_download: :keep,
@@ -193,11 +213,12 @@ defmodule Feedistiller.CLI do
   defp aliases do
     [
       d: :destination,
-      f: :feed,
+      f: :feed_url,
       s: :max_download,
       m: :min_date,
       M: :max_date,
-      c: :content_type,
+      c: :filter_content_type,
+      N: :filter_name,
       n: :name,
       u: :user,
       p: :password,

@@ -1,3 +1,17 @@
+# Copyright 2015 Serge Danzanvilliers <serge.danzanvilliers@gmail.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 defmodule Feedistiller.Reporter do
   @moduledoc """
   Reporting functions.
@@ -29,7 +43,7 @@ defmodule Feedistiller.Reporter do
                   download_successful: state.download_successful + 1,
                   total_bytes: state.total_bytes + written
                 }
-                if written != String.to_integer(entry.enclosure.size) do
+                if written != entry.enclosure.size do
                   state = %{state | errors: state.errors + 1}
                 end
                 state
@@ -44,6 +58,8 @@ defmodule Feedistiller.Reporter do
             {:error_destination, _destination} ->
               Agent.cast(Reported, fn state -> %{state | errors: state.errors + 1} end)
             {:bad_url, _url} ->
+              Agent.cast(Reported, fn state -> %{state | errors: state.errors + 1} end)
+            {:bad_feed, _url} ->
               Agent.cast(Reported, fn state -> %{state | errors: state.errors + 1} end)
           end
         end)
@@ -91,19 +107,21 @@ defmodule Feedistiller.Reporter do
         nil
       {:finish_write, _filename, written} ->
         log_info.("Download finished for `#{entry.title}`")
-        expected = String.to_integer(entry.enclosure.size)
+        expected = entry.enclosure.size
         if expected == written do
           log_info.("Total bytes: #{expected}\n")
         else
           log_error.("Total bytes: #{written}, expected: #{expected}\n")
         end
       {:error_write, filename, _written, exception} ->
-        log_error.("Error while downloading `#{Path.basename(filename)}`")
+        log_error.("Error while writing to `#{Path.basename(filename)}` (complete path: `#{filename}`)")
         log_error.("Exception: #{inspect exception}")
       {:error_destination, destination} ->
         log_error.("Destination unavailable: `#{destination}`")
       {:bad_url, url} ->
         log_error.("Feed unavailable at #{url}")
+      {:bad_feed, url} ->
+        log_error.("Incomplete feed at #{url}")
     end
   end
 end

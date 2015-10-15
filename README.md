@@ -11,6 +11,15 @@ Provides functions to download enclosures of rss/atom feeds.
   - content-type criteria
   - item name criteria
   - item date criteria  
+- an elixir wrapper over the `feeder` module (https://github.com/michaelnisi/feeder)
+  with complete support of the `file` and `stream` APIs.
+
+## Modules
+
+- `Feedistiller.Feeder`: wrapper over https://github.com/michaelnisi/feeder
+- `Feedistiller.CLI`: command line API for Feedistiller features
+- `Feedistiller.Http`: Http download of feeds
+- `Feedistiller`: feed download functions
 
 ## Usage
 
