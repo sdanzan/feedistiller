@@ -79,17 +79,31 @@ defmodule Feedistiller.Feeder do
   Parse a file. Mapping to `:feeder.file/2`.
 
   See `xml_sax_parser` documentation for full result type (in case of error, an
-  incomplete `Channel` is returned as the last item of the error tuple).
+  incomplete accumulator is returned as the last item of the error tuple).
   """
-  @spec file(String.t, list) :: {:ok, Channel.t, String.t } | {term, term, term, term, Channel.t}
+  @spec file(String.t, list) :: {:ok, term, String.t } | {term, term, term, term, term}
   def file(filename, opts) do
     :feeder.file(filename, transform_opts(opts))
   end
 
+  @doc """
+  Parse some data. Mapping to `:feeder.stream/2` with default options.
+
+  See `xml_sax_parser` documentation for full result type (in case of error, an
+  incomplete `Channel` is returned as the last item of the error tuple).
+  """
+  @spec stream(String.t) :: {:ok, Channel.t, String.t } | {term, term, term, term, Channel.t}
   def stream(data) do
     stream(data, default_opts)
   end
 
+  @doc """
+  Parse a file. Mapping to `:feeder.stream/2`.
+
+  See `xml_sax_parser` documentation for full result type (in case of error, an
+  incomplete accumulator is returned as the last item of the error tuple).
+  """
+  @spec stream(String.t, list) :: {:ok, term, String.t } | {term, term, term, term, term}
   def stream(data, opts) do
     :feeder.stream(data, transform_opts(opts))
   end
