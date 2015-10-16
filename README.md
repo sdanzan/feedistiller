@@ -32,7 +32,7 @@ Example:
 
 See `mix run feedistiller --help` or `Feedistiller.CLI.help` for more informations.
 
-Alternatively you can build the `feedistiller` standalone executable using `mix build.escript`
+Alternatively you can build the `feedistiller` standalone executable using `mix escript.build`
 and run it as `feedistiller [OPTIONS]`.
 
 Feedistiller can be embedded as an application in your projects. Just ensure the 
