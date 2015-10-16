@@ -16,8 +16,6 @@ defmodule Feedistiller.CLI do
   @moduledoc """
   Command line interface for Feedistiller.
   """
-  
-  @vsn 3
 
   alias Feedistiller.Limits
   alias Feedistiller.FeedAttributes

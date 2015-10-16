@@ -16,8 +16,6 @@ defmodule Feedistiller.Http do
   @moduledoc """
   HTTP wrappers to get feed content.
   """
-  
-  @vsn 3
 
   defmodule TimeoutError do
     defexception message: "Connection timeout"

@@ -16,8 +16,6 @@ defmodule Feedistiller.Reporter do
   @moduledoc """
   Reporting functions.
   """
-  
-  @vsn 1
 
   require Logger
   

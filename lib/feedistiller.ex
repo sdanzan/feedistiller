@@ -20,7 +20,6 @@ defmodule Feedistiller.Limits do
   - `to:` only items older than this date are retrieved (default is `:latest` for not limit)
   - `max:` maximum number of items to retrieve (default is `:unlimited` for no limit) 
   """
-  @vsn 1
 
   defstruct from: :oldest, to: :latest, max: :unlimited
   @type t :: %__MODULE__{from: Timex.DateTime.t | :oldest, to: Timex.DateTime.t | :latest, max: integer | :unlimited}
@@ -34,7 +33,6 @@ defmodule Feedistiller.Filters do
   - `mime:` a list of `Regex` applied to the `content-type` of enclosures
   - `name:` a list of Regex applied to the `title` of feed items
   """
-  @vsn 1
 
   defstruct limits: %Feedistiller.Limits{}, mime: [], name: []
   @type t :: %__MODULE__{limits: Feedistiller.Limits.t, mime: [Regex.t], name: [Regex.t]}
@@ -52,7 +50,6 @@ defmodule Feedistiller.FeedAttributes do
   - `max_simultaneous_downloads:` the maximum number of item to download at the same time (default is 3)
   - `filters:` the filters applied to the feed
   """
-  @vsn 1
 
   defstruct name: "", url: "", filters: %Feedistiller.Filters{}, destination: ".", max_simultaneous_downloads: 3, user: "", password: ""
   @type t :: %__MODULE__{name: String.t, url: String.t, filters: Filters.t, destination: String.t,
@@ -63,7 +60,6 @@ defmodule Feedistiller.Event do
   @moduledoc """
   Events reported by the downloaders.
   """
-  @vsn 1
 
   defstruct destination: "", entry: %Feedistiller.Feeder.Entry{}, event: nil
   @type t :: %__MODULE__{destination: String.t, entry: Feedistiller.Feeder.Entry.t, event: nil | tuple}
@@ -83,7 +79,6 @@ defmodule Feedistiller do
   
   `HTTPoison` must be started to use `Feedistiller` functions.
   """
-  @vsn 2
   
   alias Feedistiller.FeedAttributes
   alias Feedistiller.Event

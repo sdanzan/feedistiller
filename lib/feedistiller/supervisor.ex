@@ -14,7 +14,6 @@
 
 defmodule Feedistiller.Supervisor do
   @moduledoc "Supervisor for Feedistiller. Essentially ensures the event reporter is started."
-  @vsn 1
   
   use Supervisor
   use Application

@@ -20,8 +20,6 @@ defmodule Feedistiller.Feeder do
   records to map them to structs.
   """
 
-  @vsn 1
-
   alias Feedistiller.Feeder
 
   @type ws :: String.t | nil
