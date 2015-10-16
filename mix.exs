@@ -38,7 +38,8 @@ defmodule Feedistiller.Mixfile do
       {:httpoison, "~> 0.7.2"},
       {:feeder, "~> 2.0.0"},
       {:timex, "~> 0.19.5"},
-      {:tzdata, "== 0.1.8", override: true},
+      # Uncomment following line if you want to build the escript
+      # {:tzdata, "== 0.1.8", override: true},
       {:earmark, "~> 0.1.17", only: :docs},
       {:ex_doc, "~> 0.10.0", only: :docs},
       {:rss, "~> 0.2.1", only: :test},
