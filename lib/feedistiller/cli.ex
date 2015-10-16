@@ -17,7 +17,6 @@ defmodule Feedistiller.CLI do
   Command line interface for Feedistiller.
   """
 
-  alias Feedistiller.Limits
   alias Feedistiller.FeedAttributes
 
   @help """
@@ -55,6 +54,8 @@ defmodule Feedistiller.CLI do
                         expression will be downloaded.
   --user             : user for password protected feeds
   --password         : password for password protected feeds
+  --only-new         : only new files are downloaded. Check is only done against
+                       the required destination.
   """
 
   @doc "Entry point"
@@ -128,19 +129,7 @@ defmodule Feedistiller.CLI do
   defp parse_feeds_config([], _, feeds), do: feeds
 
   defp parse_feeds_config([{:feed_url, url} | options], global, feeds) do
-    feed = %FeedAttributes{
-      name: global.name,
-      url: url,
-      destination: global.destination,
-      filters: %{
-        global.filters |
-        limits: %Limits{
-          from: global.filters.limits.from,
-          to: global.filters.limits.to,
-          max: global.filters.limits.max
-        }
-      }
-    }
+    feed = %{global | url: url, max_simultaneous_downloads: 3}
     {options, feed} = parse_feed_attributes({options, feed})
     parse_feeds_config(options, global, [feed | feeds])
   end
@@ -177,6 +166,8 @@ defmodule Feedistiller.CLI do
         %{attr | user: user}
       {:password, password} ->
         %{attr | password: password}
+      {:only_new, only_new} ->
+        %{attr | only_new: only_new}
       _ -> attr
     end
     parse_feed_attributes({left_options, attributes})
@@ -204,7 +195,8 @@ defmodule Feedistiller.CLI do
       filter_name: :keep,
       user: :keep,
       password: :keep,
-      help: :boolean
+      help: :boolean,
+      only_new: [:boolean, :keep]
     ]
   end
 

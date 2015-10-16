@@ -51,9 +51,12 @@ defmodule Feedistiller.FeedAttributes do
   - `filters:` the filters applied to the feed
   """
 
-  defstruct name: "", url: "", filters: %Feedistiller.Filters{}, destination: ".", max_simultaneous_downloads: 3, user: "", password: ""
+  defstruct name: "", url: "", filters: %Feedistiller.Filters{},
+            destination: ".", max_simultaneous_downloads: 3, user: "", password: "",
+            only_new: false
   @type t :: %__MODULE__{name: String.t, url: String.t, filters: Filters.t, destination: String.t,
-                         max_simultaneous_downloads: :unlimited | integer, user: String.t, password: String.t}
+                         max_simultaneous_downloads: :unlimited | integer, user: String.t, password: String.t,
+                         only_new: boolean}
 end
 
 defmodule Feedistiller.Event do
@@ -130,6 +133,7 @@ defmodule Feedistiller do
     matching the feed name.
   - `max_simultaneous_downloads:` maximum number of simultaneous downloads for this file.
     Default is `3`. Can be set to `:unlimited` for no limit.
+  - `only_new:` donwload only new files (files not already in the destination directory)
   - `filters:` a set of filters to apply to the downloaded files:
     - `limits:` limits on the number of files to download:
       - `to:` download files up to this date (default is `:latest`)
@@ -141,51 +145,44 @@ defmodule Feedistiller do
       to names matching those regex are downloaded.
   """
   @spec download_feed(FeedAttributes.t, Semaphore.t | nil) :: :ok | {:error, String.t}
-  def download_feed(feed, global_sem \\ nil)
-  when is_map(feed) and (is_map(global_sem) or is_nil(global_sem))
+  def download_feed(feed = %FeedAttributes{}, global_sem \\ nil)
+  when is_map(global_sem) or is_nil(global_sem)
   do
-    case feed do
-      %FeedAttributes{name: name, url: url, filters: filters, destination: destination,
-                      max_simultaneous_downloads: max_simultaneous,
-                      user: user, password: password} ->
-        # Check we can write to destination
-        destination = Path.join(destination, name) |> Path.expand
-        try do
-          :ok = File.mkdir_p(destination)
-        rescue
-          e ->
-            GenEvent.ack_notify(Feedistiller.Reporter, %Event{event: {:error_destination, destination}})
-            raise e
-        end
-
-        chunks = BlockingQueue.create(10)
-        entries = BlockingQueue.create(10)
-        semaphores = [global_sem: global_sem, local_sem: get_sem(max_simultaneous)]
-
-        # Download feed and gather chunks in a shared queue
-        spawn_link(fn -> generate_chunks_stream(chunks, url, user, password, semaphores) end)
-
-        # Parse the feed and stream it to the entry queue
-        spawn_link(fn -> generate_entries_stream(entries, chunks, url) end)
-
-        # Filter feed entries
-        entries = entries
-                  |> Stream.filter(fn e -> !is_nil(e.enclosure) end)
-                  |> Stream.filter(&filter_feed_entry(&1, {filters.limits.from, filters.limits.to}))
-        entries = Enum.reduce(filters.mime, entries,
-          fn (regex, entries) -> entries |> Stream.filter(&Regex.match?(regex, &1.enclosure.type)) end)
-        entries = Enum.reduce(filters.name, entries,
-          fn (regex, entries) -> entries |> Stream.filter(&Regex.match?(regex, &1.title)) end)
-        if filters.limits.max != :unlimited do
-          entries = entries |> Stream.take(filters.limits.max)
-        end
-        
-        # and get all!
-        get_enclosures(entries, destination, user, password, semaphores)
-
-      _ ->
-        {:error, "Feedistiller.FeedAttributes parameter expected"}
+    # Check we can write to destination
+    destination = Path.join(feed.destination, feed.name) |> Path.expand
+    try do
+      :ok = File.mkdir_p(destination)
+    rescue
+      e ->
+        GenEvent.ack_notify(Feedistiller.Reporter, %Event{event: {:error_destination, destination}})
+        raise e
     end
+
+    chunks = BlockingQueue.create(10)
+    entries = BlockingQueue.create(10)
+    semaphores = [global_sem: global_sem, local_sem: get_sem(feed.max_simultaneous_downloads)]
+
+    # Download feed and gather chunks in a shared queue
+    spawn_link(fn -> generate_chunks_stream(chunks, feed.url, feed.user, feed.password, semaphores) end)
+
+    # Parse the feed and stream it to the entry queue
+    spawn_link(fn -> generate_entries_stream(entries, chunks, feed.url) end)
+
+    # Filter feed entries
+    entries = entries
+              |> Stream.filter(fn e -> !is_nil(e.enclosure) end)
+              |> Stream.filter(&filter_feed_entry(&1, {feed.filters.limits.from, feed.filters.limits.to}))
+              |> Stream.filter(fn e -> !(feed.only_new and File.exists?(filename(e, destination))) end)
+    entries = Enum.reduce(feed.filters.mime, entries,
+      fn (regex, entries) -> entries |> Stream.filter(&Regex.match?(regex, &1.enclosure.type)) end)
+    entries = Enum.reduce(feed.filters.name, entries,
+      fn (regex, entries) -> entries |> Stream.filter(&Regex.match?(regex, &1.title)) end)
+    if feed.filters.limits.max != :unlimited do
+      entries = entries |> Stream.take(feed.filters.limits.max)
+    end
+    
+    # and get all!
+    get_enclosures(entries, destination, feed, semaphores)
   end
 
   defp generate_chunks_stream(chunks, url, user, password, semaphores) do
@@ -209,37 +206,28 @@ defmodule Feedistiller do
 
   defp generate_entries_stream(entries, chunks, url) do
     try do
-      case BlockingQueue.dequeue(chunks) do
-        {:ok, start_data} ->
-          Feeder.stream(
-            start_data,
-            [
-              event_state: entries,
-              event_fun: fn
-                (:endFeed, entries) ->
-                  BlockingQueue.complete(entries)
-                  entries 
-                (entry = %Feeder.Entry{}, entries) -> 
-                  BlockingQueue.enqueue(entries, entry)
-                  entries
-                (_, entries) -> entries
-              end,
-              continuation_state: chunks,
-              continuation_fun: fn chunks ->
-                case BlockinQueue.dequeue(chunks) do
-                  {:ok, chunk} -> {chunk, chunks}
-                  state ->
-                    if state == :error do
-                      GenEvent.ack_notify(Feedistiller.Reporter, %Event{event: {:bad_feed, url}})
-                    end
-                    BlockingQueue.complete(entries)
-                    {"", chunks}
+      Feeder.stream(
+        [
+          event_state: entries,
+          event_fun: fn
+            (entry = %Feeder.Entry{}, entries) -> 
+              BlockingQueue.enqueue(entries, entry)
+              entries
+            (_, entries) -> entries
+          end,
+          continuation_state: chunks,
+          continuation_fun: fn chunks ->
+            case BlockingQueue.dequeue(chunks) do
+              {:ok, chunk} -> {chunk, chunks}
+              state ->
+                if state == :error do
+                  GenEvent.ack_notify(Feedistiller.Reporter, %Event{event: {:bad_feed, url}})
                 end
-              end
-            ])
-        _ -> nil
-      end
-    after
+                {"", chunks}
+            end
+          end
+        ])
+    after # whatever happens we complete the entry queue
       BlockingQueue.complete(entries)
     end
   end
@@ -276,14 +264,18 @@ defmodule Feedistiller do
     sem_release(gsem)
   end
 
+  defp filename(entry, destination) do
+    Path.join(destination, String.replace(entry.title, ~r/\/|\\/, "|") <> Path.extname(entry.enclosure.url))
+  end
+
   # Download one enclosure
-  defp get_enclosure(entry, destination, user, password, semaphores, countdown) do
+  defp get_enclosure(entry, destination, feed, semaphores, countdown) do
     acquire(semaphores)
     CountDown.increase(countdown)
-    spawn_link(fn () -> 
-      filename = Path.join(destination, String.replace(entry.title, ~r/\/|\\/, "|") <> Path.extname(entry.enclosure.url))
+    spawn_link(fn -> 
+      filename = filename(entry, destination)
       GenEvent.ack_notify(Feedistiller.Reporter, %Feedistiller.Event{destination: destination, entry: entry, event: {:begin, filename}})
-      get_enclosure(filename, entry, user, password)
+      get_enclosure(filename, entry, feed.user, feed.password)
       CountDown.signal(countdown)
       release(semaphores)
     end)
@@ -316,10 +308,10 @@ defmodule Feedistiller do
   end
 
   # Retrieve all enclosures
-  defp get_enclosures(entries, destination, user, password, semaphores) do
+  defp get_enclosures(entries, destination, feed, semaphores) do
     countdown = CountDown.create_link(0)
     entries |> Enum.each(# fetch all enclosures, up to 'max' at the same time
-      fn entry -> get_enclosure(entry, destination, user, password, semaphores, countdown) end)      
+      fn entry -> get_enclosure(entry, destination, feed, semaphores, countdown) end)      
     CountDown.wait(countdown)
     CountDown.destroy(countdown)
   end

@@ -22,7 +22,7 @@ defmodule Feedistiller.CLI.Test do
   test "parse some options" do
     options = [ "--max-download", "14", "--destination", "destination", "--max", "15", "--name", "ALL",
                 "--feed-url", "url-1", "--max", "3", "--max-download", "2", "--user", "Bilbo", "--password", "SauronSux", "--name", "Le super podcast",
-                "--feed-url", "url-2", "--destination", "destination-2", "--filter-content-type", "^audio", "--max", "unlimited",
+                "--feed-url", "url-2", "--destination", "destination-2", "--filter-content-type", "^audio", "--max", "unlimited", "--only-new",
                 "--feed-url", "url-3", "--filter-name", "foo", "--min-date", "2015-12-12 12:12:12", "--filter-name", "bar", "--max-date", "2015-12-13 13:13:13",
               ]
 
@@ -34,6 +34,7 @@ defmodule Feedistiller.CLI.Test do
     assert g.user == ""
     assert g.password == ""
     assert g.name == "ALL"
+    refute g.only_new
     
     [f3, f2, f1] = feeds
 
@@ -48,6 +49,7 @@ defmodule Feedistiller.CLI.Test do
     assert f1.user == "Bilbo"
     assert f1.password == "SauronSux"
     assert f1.name == "Le super podcast"
+    refute f1.only_new
 
     assert f2.url == "url-2"
     assert f2.destination == Path.expand("destination-2")
@@ -55,11 +57,13 @@ defmodule Feedistiller.CLI.Test do
     assert f2.filters.limits.max == :unlimited
     assert f2.filters.mime == [~r/^audio/]
     assert f2.name == "ALL"
+    assert f2.only_new
 
     assert f3.url == "url-3"
     assert f3.filters.name == [~r/bar/, ~r/foo/]
     assert f3.filters.limits.max == 15
     assert f3.filters.limits.from == Timex.DateFormat.parse!("2015-12-12 12:12:12", @format)
     assert f3.filters.limits.to == Timex.DateFormat.parse!("2015-12-13 13:13:13", @format)
+    refute f3.only_new
   end
 end

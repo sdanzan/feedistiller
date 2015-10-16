@@ -87,13 +87,24 @@ defmodule Feedistiller.Feeder do
   end
 
   @doc """
-  Parse some data. Mapping to `:feeder.stream/2` with default options.
+  Parse some data.
+  
+  If the input parameter is a string, it will map to `:feeder.stream/2` with default options.
+  If itś a prop list, it will map to `:feeder.stream/2` after calling your continuation function
+  once to bootstrap the data (curiously `xml_sax_parser` does not do that automatically).
 
   See `xml_sax_parser` documentation for full result type (in case of error, an
   incomplete `Channel` is returned as the last item of the error tuple).
   """
-  @spec stream(String.t) :: {:ok, Channel.t, String.t } | {term, term, term, term, Channel.t}
-  def stream(data) do
+
+  @spec stream(String.t | Keyword.t ) :: {:ok, Channel.t, String.t } | {term, term, term, term, Channel.t}
+
+  def stream(opts = [_|_]) do
+    {data, state} = opts[:continuation_fun].(opts[:continuation_state])
+    stream(data, Keyword.put(opts, :continuation_state, state))
+  end
+
+  def stream(<<data :: binary>>) do
     stream(data, default_opts)
   end
 
@@ -103,24 +114,14 @@ defmodule Feedistiller.Feeder do
   See `xml_sax_parser` documentation for full result type (in case of error, an
   incomplete accumulator is returned as the last item of the error tuple).
   """
-  @spec stream(String.t, list) :: {:ok, term, String.t } | {term, term, term, term, term}
+  @spec stream(String.t, Keyword.t) :: {:ok, term, String.t } | {term, term, term, term, term}
   def stream(data, opts) do
     :feeder.stream(data, transform_opts(opts))
   end
 
   @inline true
   defp transform_opts(opts) do
-    opts = [
-      event_state: opts[:event_state],
-      event_fun: fn e, acc -> opts[:event_fun].(event(e), acc) end
-    ]
-    if opts[:continuation_fun] do
-      opts = [opts[:continuation_fun] | opts]
-    end
-    if opts[:continuation_state] do
-      opts = [opts[:continuation_state] | opts]
-    end
-    opts
+    Keyword.put(opts, :event_fun, fn e, acc -> opts[:event_fun].(event(e), acc) end)
   end
 
   @inline true
