@@ -19,7 +19,7 @@ defmodule Feedistiller.Mixfile do
   #
   # Type "mix help compile.app" for more information
   def application do
-    [applications: [:logger, :tzdata, :httpoison, :feeder_ex],
+    [applications: [:logger, :tzdata, :httpoison],
      mod: {Feedistiller.Supervisor, []}]
   end
 
@@ -36,6 +36,7 @@ defmodule Feedistiller.Mixfile do
     [
       {:alambic, "~> 0.1.0"},
       {:httpoison, "~> 0.7.2"},
+      {:feeder, "~> 2.0.0"},
       {:timex, "~> 0.19.5"},
       {:tzdata, "== 0.1.8", override: true},
       {:earmark, "~> 0.1.17", only: :docs},

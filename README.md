@@ -1,6 +1,7 @@
-# Feedistiller [![Build Status](https://travis-ci.org/sdanzan/feedistiller.svg?branch=master)](https://travis-ci.org/sdanzan/feedistiller)
+# Feedistiller [![Build Status](https://travis-ci.org/sdanzan/feedistiller.svg?branch=master)](https://travis-ci.org/sdanzan/feedistiller) [![Hex pm](http://img.shields.io/hexpm/v/feedistiller.svg?style=flat)](https://hex.pm/packages/feedistiller)
 
-Provides functions to download enclosures of rss/atom feeds.
+Provides functions to download enclosures of rss/atom feeds. Includes
+a small wrapper over the `feeder` feed parsing library.
 
 ## Features:
 
@@ -21,7 +22,7 @@ Provides functions to download enclosures of rss/atom feeds.
 - `Feedistiller.Http`: Http download of feeds
 - `Feedistiller`: feed download functions
 
-## Usage
+## Command line usage
 
 `mix run feedistiller.exs [OPTIONS]`
 
@@ -31,7 +32,10 @@ Example:
 
 See `mix run feedistiller --help` or `Feedistiller.CLI.help` for more informations.
 
-Feedistiller can be embeded as an application in your projects. Just ensure the 
+Alternatively you can build the `feedistiller` standalone executable using `mix build.escript`
+and run it as `feedistiller [OPTIONS]`.
+
+Feedistiller can be embedded as an application in your projects. Just ensure the 
 `feedistiller` application is started. Download functions are located in the
 `Feedistiller` module. Reporting is available in the `Feedistiller.Reporter.Reported` Agent.
 You can activate console or logger logging via the `Feedistiller.Reporter.log_to_console/log_to_logger`
@@ -41,15 +45,9 @@ functions. See the source code for some example.
 
 - More filtering options
 - More authentication options
-- Asynchronous parsing for big feeds (with 1000s of items)
 - Persistency
-- tests (currenlty tests are done in the REPL against a few feeds and are not
+- Public tests (currently tests are done in the REPL against a few feeds and are not
   committed in the repo)
-- **Note:** escript.build does not currently work due to the way `tzdata` handles
-  its embedded data (see: https://github.com/bitwalker/timex/issues/86). You must
-  use the `feedistiller.exs` script instead.
-
-`Feedistiller` makes use of `HTTPoison`, `FeederEx` and `Timex`.
 
 ## Installation
 
@@ -72,7 +70,7 @@ If [available in Hex](https://hex.pm/docs/publish), the package can be installed
   1. Add feedistiller to your list of dependencies in `mix.exs`:
 
         def deps do
-          [{:feedistiller, "~> 0.0.2"}]
+          [{:feedistiller, "~> 0.1.0"}]
         end
 
   2. Ensure alambic is started before your application:
