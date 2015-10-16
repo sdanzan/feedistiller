@@ -65,7 +65,7 @@ Add the github repository to your mix dependencies:
           [applications: [:feedistiller]]
         end
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed as:
+Or use the Hex package:
 
   1. Add feedistiller to your list of dependencies in `mix.exs`:
 
@@ -73,7 +73,7 @@ If [available in Hex](https://hex.pm/docs/publish), the package can be installed
           [{:feedistiller, "~> 0.1.0"}]
         end
 
-  2. Ensure alambic is started before your application:
+  2. Ensure feedistiller is started before your application:
 
         def application do
           [applications: [:feedistiller]]
