@@ -146,7 +146,7 @@ defmodule Feedistiller.Feeder do
   defp wd(any) do
     case Timex.DateFormat.parse(any, "{RFC1123}") do
       {:error, _} -> nil
-      date -> date
+      {:ok, date} -> date
     end
   end
 
