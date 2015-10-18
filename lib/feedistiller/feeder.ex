@@ -121,7 +121,11 @@ defmodule Feedistiller.Feeder do
 
   @inline true
   defp transform_opts(opts) do
-    Keyword.put(opts, :event_fun, fn e, acc -> opts[:event_fun].(event(e), acc) end)
+    if opts[:event_fun] do
+      Keyword.put(opts, :event_fun, fn e, acc -> opts[:event_fun].(event(e), acc) end)
+    else
+      transform_opts(Keyword.merge(default_opts, opts))
+    end
   end
 
   @inline true
@@ -133,7 +137,7 @@ defmodule Feedistiller.Feeder do
   end
 
   @inline true
-  defp efun(:endFeed, channel), do: channel
+  defp efun(:endFeed, channel), do: %{channel | entries: :lists.reverse(channel.entries)}
   defp efun(f = %Feed{}, channel), do: %{channel | feed: f}
   defp efun(e = %Entry{}, channel), do: %{channel | entries: [e | channel.entries]}
 

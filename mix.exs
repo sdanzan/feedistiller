@@ -42,7 +42,6 @@ defmodule Feedistiller.Mixfile do
       # {:tzdata, "== 0.1.8", override: true},
       {:earmark, "~> 0.1.17", only: :docs},
       {:ex_doc, "~> 0.10.0", only: :docs},
-      {:rss, "~> 0.2.1", only: :test},
     ]
   end
 
