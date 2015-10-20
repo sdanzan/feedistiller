@@ -56,6 +56,7 @@ defmodule Feedistiller.CLI do
   --password         : password for password protected feeds
   --only-new         : only new files are downloaded. Check is only done against
                        the required destination.
+  --timeout          : timeout in seconds for the http operations. Default to 60s.
   """
 
   @doc "Entry point"
@@ -68,7 +69,7 @@ defmodule Feedistiller.CLI do
         {:feeds, [_, {:feeds, []}]} ->
           IO.puts(@help)
         {:feeds, feeds} ->
-          Task.async(&Feedistiller.Reporter.log_to_stdout/0)
+          Feedistiller.Reporter.log_to_stdout
           case feeds[:global].max_simultaneous_downloads do
             :unlimited ->
               Feedistiller.download_feeds(feeds[:feeds])
@@ -168,6 +169,8 @@ defmodule Feedistiller.CLI do
         %{attr | password: password}
       {:only_new, only_new} ->
         %{attr | only_new: only_new}
+      {:timeout, timeout} ->
+        %{attr | timeout: timeout}
       _ -> attr
     end
     parse_feed_attributes({left_options, attributes})
@@ -196,7 +199,8 @@ defmodule Feedistiller.CLI do
       user: :keep,
       password: :keep,
       help: :boolean,
-      only_new: [:boolean, :keep]
+      only_new: [:boolean, :keep],
+      timeout: [:integer, :keep],
     ]
   end
 

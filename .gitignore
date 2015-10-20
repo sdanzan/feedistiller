@@ -7,5 +7,4 @@ erl_crash.dump
 *.swp
 url.txt
 test.xml
-feedistiller
 /feeds/

@@ -49,14 +49,15 @@ defmodule Feedistiller.FeedAttributes do
     with the same name as the feed). Default is `.` (current directory)
   - `max_simultaneous_downloads:` the maximum number of item to download at the same time (default is 3)
   - `filters:` the filters applied to the feed
+  - `tiemout:` timeout applied to http operations
   """
 
   defstruct name: "", url: "", filters: %Feedistiller.Filters{},
             destination: ".", max_simultaneous_downloads: 3, user: "", password: "",
-            only_new: false
+            only_new: false, timeout: 60
   @type t :: %__MODULE__{name: String.t, url: String.t, filters: Filters.t, destination: String.t,
                          max_simultaneous_downloads: :unlimited | integer, user: String.t, password: String.t,
-                         only_new: boolean}
+                         only_new: boolean, timeout: integer}
 end
 
 defmodule Feedistiller.Event do
@@ -163,7 +164,7 @@ defmodule Feedistiller do
     semaphores = [global_sem: global_sem, local_sem: get_sem(feed.max_simultaneous_downloads)]
 
     # Download feed and gather chunks in a shared queue
-    spawn_link(fn -> generate_chunks_stream(chunks, feed.url, feed.user, feed.password, semaphores) end)
+    spawn_link(fn -> generate_chunks_stream(chunks, feed, semaphores) end)
 
     # Parse the feed and stream it to the entry queue
     spawn_link(fn -> generate_entries_stream(entries, chunks, feed.url) end)
@@ -185,18 +186,18 @@ defmodule Feedistiller do
     get_enclosures(entries, destination, feed, semaphores)
   end
 
-  defp generate_chunks_stream(chunks, url, user, password, semaphores) do
+  defp generate_chunks_stream(chunks, feed, semaphores) do
     try do
       acquire(semaphores)
-      Http.stream_get!(url,
+      Http.stream_get!(feed.url,
         fn (chunk, chunks) ->
           :ok = BlockingQueue.enqueue(chunks, chunk)
           chunks
         end,
-        chunks, user, password)
+        chunks, feed.timeout, feed.user, feed.password)
     rescue
       e ->
-        GenEvent.ack_notify(Feedistiller.Reporter, %Event{event: {:bad_url, url}})
+        GenEvent.ack_notify(Feedistiller.Reporter, %Event{event: {:bad_url, feed.url}})
         raise e
     after
       BlockingQueue.complete(chunks)
@@ -275,14 +276,14 @@ defmodule Feedistiller do
     spawn_link(fn -> 
       filename = filename(entry, destination)
       GenEvent.ack_notify(Feedistiller.Reporter, %Feedistiller.Event{destination: destination, entry: entry, event: {:begin, filename}})
-      get_enclosure(filename, entry, feed.user, feed.password)
+      get_enclosure(filename, entry, feed)
       CountDown.signal(countdown)
       release(semaphores)
     end)
   end
 
   # Fetch an enclosure and save it
-  defp get_enclosure(filename, entry, user, password) do
+  defp get_enclosure(filename, entry, feed) do
     event = %Event{destination: Path.dirname(filename), entry: entry}
     case File.open(filename, [:write]) do
       {:ok, file} ->
@@ -296,7 +297,7 @@ defmodule Feedistiller do
               s
             end,
             0,
-            user, password)
+            feed.timeout, feed.user, feed.password)
           GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:finish_write, filename, written}})
         rescue
           e -> GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:error_write, filename, 0, e}})

@@ -20,15 +20,19 @@ defmodule Feedistiller.Http do
   defmodule TimeoutError do
     defexception message: "Connection timeout"
   end
+
+  defmodule TooManyRedirectError do
+    defexception message: "Too many redirect"
+  end
   
   @doc """
   Asynchronous get returning the body in chunks, with redirection handling
   (up to 5).
   A provided callback is called on each chunks in order with an accumulator.
   """
-  @spec stream_get!(binary, fun, any, String.t, String.t) :: :ok
-  def stream_get!(url, process_chunk, state, user, password) do
-    stream_get!(url, process_chunk, state, 5, user, password)
+  @spec stream_get!(binary, fun, any, integer, String.t, String.t) :: :ok
+  def stream_get!(url, process_chunk, state, timeout, user, password) do
+    stream_get!(url, process_chunk, state, timeout, 5, user, password)
   end
 
   @doc """
@@ -36,13 +40,13 @@ defmodule Feedistiller.Http do
   (up to provided maximum redirections).
   A provided callback is called on each chunks in order with an accumulator.
   """
-  @spec stream_get!(binary, fun, any, integer, String.t, String.t) :: :ok
+  @spec stream_get!(binary, fun, any, integer, integer, String.t, String.t) :: :ok
 
-  def stream_get!(_, _, _, -1, _, _) do
-    raise :too_many_redirect
+  def stream_get!(_, _, _, _, -1, _, _) do
+    raise TooManyRedirectError
   end
 
-  def stream_get!(url, process_chunk, state, max_redirect, user, password)
+  def stream_get!(url, process_chunk, state, timeout, max_redirect, user, password)
   when is_integer(max_redirect) and max_redirect >= 0
   do
     hackney = [follow_redirect: true]
@@ -50,21 +54,21 @@ defmodule Feedistiller.Http do
       hackney = [basic_auth: {user, password}] ++ hackney
     end
     HTTPoison.get!(url, [], [stream_to: self, hackney: hackney])
-    stream_get_loop!(process_chunk, state, max_redirect, user, password)
+    stream_get_loop!(process_chunk, state, timeout, max_redirect, user, password)
   end
 
-  @spec stream_get_loop!(fun, any, integer, String.t, String.t) :: {:ok, any}
-  defp stream_get_loop!(p, s, r, u, pw) do
+  @spec stream_get_loop!(fun, any, integer, integer, String.t, String.t) :: {:ok, any}
+  defp stream_get_loop!(p, s, t, r, u, pw) do
     receive do
       %HTTPoison.AsyncChunk{chunk: {:redirect, location, _headers}} ->
-        stream_get!(location, p, s, r - 1, u, pw)
+        stream_get!(location, p, s, t, r - 1, u, pw)
       %HTTPoison.AsyncChunk{chunk: chunk} -> 
-        stream_get_loop!(p, p.(chunk, s), r, u, pw)
+        stream_get_loop!(p, p.(chunk, s), t, r, u, pw)
       %HTTPoison.AsyncEnd{} -> {:ok, s}
-      _ -> stream_get_loop!(p, s, r, u, pw)
+      _ -> stream_get_loop!(p, s, t, r, u, pw)
     after
       # no response for a long time, just give up
-      120_000 -> raise TimeoutError
+      t * 1000 -> raise TimeoutError
     end
   end
 end

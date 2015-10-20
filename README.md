@@ -46,8 +46,6 @@ functions. See the source code for some example.
 - More filtering options
 - More authentication options
 - Persistency
-- Public tests (currently tests are done in the REPL against a few feeds and are not
-  committed in the repo)
 
 ## Installation
 
@@ -70,7 +68,7 @@ Or use the Hex package:
   1. Add feedistiller to your list of dependencies in `mix.exs`:
 
         def deps do
-          [{:feedistiller, "~> 0.1.0"}]
+          [{:feedistiller, "~> 1.0.0"}]
         end
 
   2. Ensure feedistiller is started before your application:

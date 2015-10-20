@@ -5,11 +5,13 @@ defmodule Feedistiller.Mixfile do
 
   def project do
     [app: :feedistiller,
-     version: "0.1.1",
+     version: "1.0.0",
      description: @description,
      package: package,
      elixir: "~> 1.1",
      escript: escript_config,
+     test_coverage: [tool: ExCoveralls],
+     preferred_cli_env: [coveralls: :test],
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
      deps: deps]
@@ -42,6 +44,8 @@ defmodule Feedistiller.Mixfile do
       # {:tzdata, "== 0.1.8", override: true},
       {:earmark, "~> 0.1.17", only: :docs},
       {:ex_doc, "~> 0.10.0", only: :docs},
+      {:mock, "~> 0.1.1", only: :test},
+      {:excoveralls, "~> 0.4.0", only: :test}
     ]
   end
 

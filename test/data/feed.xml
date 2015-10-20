@@ -21,7 +21,7 @@
             <id>item1</id>
             <description>Item 1</description>
             <subtitle>Subtitle 1</subtitle>
-            <enclosure url="http://localhost:42424/enclosure.txt" length="22" type ="text/plain" />
+            <enclosure url="enclosure.txt" length="22" type ="text/plain" />
         </item>
         <item>
             <author>Herself</author>
@@ -32,7 +32,7 @@
             <id>item2</id>
             <description>Item 2</description>
             <subtitle>Subtitle 2</subtitle>
-            <enclosure url="http://localhost:42424/enclosure.txt" length="22" type ="text/plain" />
+            <enclosure url="enclosure.txt" length="22" type ="text/plain" />
         </item>
         <item>
             <author>Herself</author>
@@ -43,7 +43,7 @@
             <id>item3</id>
             <description>Item 3</description>
             <subtitle>Subtitle 3</subtitle>
-            <enclosure url="http://localhost:42424/enclosure.txt" length="22" type ="text/plain" />
+            <enclosure url="enclosure.txt" length="22" type ="text/plain" />
         </item>
         <item>
             <author>Herself</author>
@@ -54,7 +54,7 @@
             <id>item4</id>
             <description>Item 4</description>
             <subtitle>Subtitle 4</subtitle>
-            <enclosure url="http://localhost:42424/enclosure.xml" length="65" type ="text/xml" />
+            <enclosure url="enclosure.xml" length="65" type ="text/xml" />
         </item>
         <item>
             <author>Herself</author>
@@ -65,7 +65,7 @@
             <id>item5</id>
             <description>Item 5</description>
             <subtitle>Subtitle 5</subtitle>
-            <enclosure url="http://localhost:42424/enclosure.xml" length="22" type ="text/xml" />
+            <enclosure url="enclosure.xml" length="22" type ="text/xml" />
         </item>
     </channel>
 </rss>
