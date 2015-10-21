@@ -285,7 +285,8 @@ defmodule Feedistiller do
   # Fetch an enclosure and save it
   defp get_enclosure(filename, entry, feed) do
     event = %Event{destination: Path.dirname(filename), entry: entry}
-    case File.open(filename, [:write]) do
+    tmp_filename = filename <> ".tmp"
+    case File.open(tmp_filename, [:write]) do
       {:ok, file} ->
         try do
           {:ok, written} = Http.stream_get!(
@@ -299,10 +300,12 @@ defmodule Feedistiller do
             0,
             feed.timeout, feed.user, feed.password)
           GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:finish_write, filename, written}})
+          File.close(file)
+          File.rename(tmp_filename, filename)
         rescue
           e -> GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:error_write, filename, 0, e}})
-        after
           File.close(file)
+          File.rm(tmp_filename)
         end
       e -> GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:error_write, filename, 0, e}})
     end

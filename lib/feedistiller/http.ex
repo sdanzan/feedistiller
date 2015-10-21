@@ -65,7 +65,8 @@ defmodule Feedistiller.Http do
       %HTTPoison.AsyncChunk{chunk: chunk} -> 
         stream_get_loop!(p, p.(chunk, s), t, r, u, pw)
       %HTTPoison.AsyncEnd{} -> {:ok, s}
-      _ -> stream_get_loop!(p, s, t, r, u, pw)
+      %HTTPoison.AsyncHeaders{} -> stream_get_loop!(p, s, t, r, u, pw)
+      %HTTPoison.AsyncStatus{code: code} when code in [200, 301, 302, 307, 308] -> stream_get_loop!(p, s, t, r, u, pw)
     after
       # no response for a long time, just give up
       t * 1000 -> raise TimeoutError
