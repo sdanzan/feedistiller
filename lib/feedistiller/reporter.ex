@@ -97,9 +97,9 @@ defmodule Feedistiller.Reporter do
   defp log(%Feedistiller.Event{destination: destination, entry: entry, event: event}, log_info, log_error) do
     case event do
       {:begin_feed, feed_name} ->
-        log_info.("Starting downloading feed #{feed_name}")
+        log_info.("Starting downloading feed #{feed_name}\n")
       {:end_feed, feed_name} ->
-        log_info.("Finished downloading feed #{feed_name}")
+        log_info.("Finished downloading feed #{feed_name}\n")
       {:begin, filename} ->
         log_info.("Starting download for `#{entry.title}`")
         log_info.("URL: #{entry.enclosure.url}")
