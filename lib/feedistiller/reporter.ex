@@ -59,6 +59,7 @@ defmodule Feedistiller.Reporter do
               Agent.cast(Reported, fn state -> %{state | errors: state.errors + 1} end)
             {:bad_feed, _url} ->
               Agent.cast(Reported, fn state -> %{state | errors: state.errors + 1} end)
+            _ -> nil
           end
         end)
       end)
@@ -95,14 +96,16 @@ defmodule Feedistiller.Reporter do
 
   defp log(%Feedistiller.Event{destination: destination, entry: entry, event: event}, log_info, log_error) do
     case event do
+      {:begin_feed, feed_name} ->
+        log_info.("Starting downloading feed #{feed_name}")
+      {:end_feed, feed_name} ->
+        log_info.("Finished downloading feed #{feed_name}")
       {:begin, filename} ->
         log_info.("Starting download for `#{entry.title}`")
         log_info.("URL: #{entry.enclosure.url}")
         log_info.("Destination: `#{destination}`")
         log_info.("Saving to: `#{Path.basename(filename)}`")
         log_info.("Expected size: #{entry.enclosure.size}\n")
-      {:write, _filename, _written} ->
-        nil
       {:finish_write, _filename, written} ->
         log_info.("Download finished for `#{entry.title}`")
         expected = entry.enclosure.size
@@ -120,6 +123,7 @@ defmodule Feedistiller.Reporter do
         log_error.("Feed unavailable at #{url}")
       {:bad_feed, url} ->
         log_error.("Incomplete feed at #{url}")
+      _ -> nil
     end
   end
 end

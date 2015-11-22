@@ -189,6 +189,7 @@ defmodule Feedistiller do
   defp generate_chunks_stream(chunks, feed, semaphores) do
     try do
       acquire(semaphores)
+      GenEvent.ack_notify(Feedistiller.Reporter, %Event{event: {:begin_feed, feed.name}})
       Http.stream_get!(feed.url,
         fn (chunk, chunks) ->
           :ok = BlockingQueue.enqueue(chunks, chunk)
@@ -202,6 +203,7 @@ defmodule Feedistiller do
     after
       BlockingQueue.complete(chunks)
       release(semaphores)
+      GenEvent.ack_notify(Feedistiller.Reporter, %Event{event: {:end_feed, feed.name}})
     end
   end
 
