@@ -106,7 +106,7 @@ defmodule Feedistiller.CLI do
     else
       global_config = %FeedAttributes{max_simultaneous_downloads: :unlimited}
       {options, global_config} = parse_feed_attributes({parsed, global_config})
-      feeds = parse_feeds_config(options, global_config, [])
+      feeds = parse_feeds_config(options, global_config, []) |> :lists.reverse
       {:feeds, [global: global_config, feeds: feeds]}
     end
   end

@@ -40,7 +40,7 @@ defmodule Feedistiller.CLI.Test do
     refute g.only_new
     assert g.timeout == 40
     
-    [f3, f2, f1] = feeds
+    [f1, f2, f3] = feeds
 
     assert f1.url == "url-1"
     assert f1.destination == Path.expand("destination")
