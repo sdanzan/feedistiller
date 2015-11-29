@@ -40,7 +40,7 @@ defmodule Feedistiller.CLI do
                        total number of download across all feeds instead (this
                        means it can be cumulated with a feed specific 
                        'max-download' option).
-  --max MAX          : maximum number of files to download per feed (cane be 
+  --max MAX          : maximum number of files to download per feed (can be 
                        'unlimited' for no limit)
   --min-date MINDATE : download files from item newer than this date. Date 
                        format must be ISOz or YYYY-MM-DD HH:mm:ss (e.g 
