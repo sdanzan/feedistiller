@@ -53,11 +53,7 @@ defmodule Feedistiller.Reporter do
                   total_bytes: state.total_bytes + written
                 }
               end)
-            {:error_destination, _destination} ->
-              Agent.cast(Reported, fn state -> %{state | errors: state.errors + 1} end)
-            {:bad_url, _url} ->
-              Agent.cast(Reported, fn state -> %{state | errors: state.errors + 1} end)
-            {:bad_feed, _url} ->
+            {bad, _} when bad in [:error_destination, :bad_url, :bad_feed] ->
               Agent.cast(Reported, fn state -> %{state | errors: state.errors + 1} end)
             _ -> nil
           end

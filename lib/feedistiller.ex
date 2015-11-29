@@ -159,18 +159,18 @@ defmodule Feedistiller do
         raise e
     end
 
-    chunks = BlockingQueue.create(10)
-    entries = BlockingQueue.create(10)
+    chunksq = BlockingQueue.create(10)
+    entriesq = BlockingQueue.create(10)
     semaphores = [global_sem: global_sem, local_sem: get_sem(feed.max_simultaneous_downloads)]
 
     # Download feed and gather chunks in a shared queue
-    spawn_link(fn -> generate_chunks_stream(chunks, feed, semaphores) end)
+    spawn(fn -> generate_chunks_stream(chunksq, feed, semaphores) end)
 
     # Parse the feed and stream it to the entry queue
-    spawn_link(fn -> generate_entries_stream(entries, chunks, feed.url) end)
+    spawn(fn -> generate_entries_stream(entriesq, chunksq, feed.url) end)
 
     # Filter feed entries
-    entries = entries
+    entries = entriesq
               |> Stream.filter(fn e -> !is_nil(e.enclosure) end)
               |> Stream.filter(&filter_feed_entry(&1, {feed.filters.limits.from, feed.filters.limits.to}))
               |> Stream.filter(fn e -> !(feed.only_new and File.exists?(filename(e, destination))) end)
@@ -184,6 +184,10 @@ defmodule Feedistiller do
     
     # and get all!
     get_enclosures(entries, destination, feed, semaphores)
+
+    # clean up
+    BlockingQueue.destroy(chunksq)
+    BlockingQueue.destroy(entriesq)
   end
 
   defp generate_chunks_stream(chunks, feed, semaphores) do
@@ -197,9 +201,7 @@ defmodule Feedistiller do
         end,
         chunks, feed.timeout, feed.user, feed.password)
     rescue
-      e ->
-        GenEvent.ack_notify(Feedistiller.Reporter, %Event{event: {:bad_url, feed.url}})
-        raise e
+      _ -> GenEvent.ack_notify(Feedistiller.Reporter, %Event{event: {:bad_url, feed.url}})
     after
       BlockingQueue.complete(chunks)
       release(semaphores)
@@ -230,6 +232,8 @@ defmodule Feedistiller do
             end
           end
         ])
+    rescue
+      _ -> GenEvent.ack_notify(Feedistiller.Reporter, %Event{event: {:bad_feed, url}})
     after # whatever happens we complete the entry queue
       BlockingQueue.complete(entries)
     end
