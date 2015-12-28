@@ -18,6 +18,10 @@ defmodule Feedistiller.Reporter do
   """
 
   require Logger
+
+  @doc "The stream of download events"
+  @spec stream() :: GenEvent.Stream.t
+  def stream, do: GenEvent.stream(Feedistiller.Reporter)
   
   defmodule Reported do
     @moduledoc "Name of the agent storing state"
@@ -28,8 +32,7 @@ defmodule Feedistiller.Reporter do
     
     def start_link do
       pid = spawn_link(fn ->
-        GenEvent.stream(Feedistiller.Reporter)
-        |> Enum.each(fn %Feedistiller.Event{destination: _dest, entry: entry, event: event} ->
+        for %Feedistiller.Event{destination: _dest, entry: entry, event: event} <- Feedistiller.Reporter.stream do
           case event do
             {:begin, _filename} ->
               Agent.cast(Reported, fn state -> %{state | download: state.download + 1} end)
@@ -57,7 +60,7 @@ defmodule Feedistiller.Reporter do
               Agent.cast(Reported, fn state -> %{state | errors: state.errors + 1} end)
             _ -> nil
           end
-        end)
+        end
       end)
       Process.register(pid, __MODULE__)
       {:ok, pid}
@@ -67,8 +70,7 @@ defmodule Feedistiller.Reporter do
   @doc "Stream events to standard output."
   @spec sync_log_to_stdout() :: :ok
   def sync_log_to_stdout do
-    GenEvent.stream(Feedistiller.Reporter)
-    |> Enum.each(fn event -> log(event, &IO.puts/1, &IO.puts/1) end)
+    for event <- stream, do: log(event, &IO.puts/1, &IO.puts/1)
   end
 
   @doc "Starts a task streaming events to standard output."
@@ -80,8 +82,7 @@ defmodule Feedistiller.Reporter do
   @doc "Stream events to Logger"
   @spec sync_log_to_logger() :: :ok
   def sync_log_to_logger do
-    GenEvent.stream(Feedistiller.Reporter)
-    |> Enum.each(fn event -> log(event, fn s -> Logger.info(s) end, fn s -> Logger.error(s) end) end)
+    for event <- stream, do: log(event, fn s -> Logger.info(s) end, fn s -> Logger.error(s) end)
   end
 
   @doc "Starts a task streaming events to Logger."

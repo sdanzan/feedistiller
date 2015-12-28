@@ -281,7 +281,7 @@ defmodule Feedistiller do
     CountDown.increase(countdown)
     spawn_link(fn -> 
       filename = filename(entry, destination)
-      GenEvent.ack_notify(Feedistiller.Reporter, %Feedistiller.Event{destination: destination, entry: entry, event: {:begin, filename}})
+      GenEvent.ack_notify(Feedistiller.Reporter, %Event{destination: destination, entry: entry, event: {:begin, filename}})
       get_enclosure(filename, entry, feed)
       CountDown.signal(countdown)
       release(semaphores)
@@ -320,8 +320,10 @@ defmodule Feedistiller do
   # Retrieve all enclosures
   defp get_enclosures(entries, destination, feed, semaphores) do
     countdown = CountDown.create_link(0)
-    entries |> Enum.each(# fetch all enclosures, up to 'max' at the same time
-      fn entry -> get_enclosure(entry, destination, feed, semaphores, countdown) end)      
+    # fetch all enclosures, up to 'max' at the same time
+    for entry <- entries do
+      get_enclosure(entry, destination, feed, semaphores, countdown)
+    end
     CountDown.wait(countdown)
     CountDown.destroy(countdown)
   end
