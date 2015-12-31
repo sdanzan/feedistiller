@@ -7,4 +7,5 @@ erl_crash.dump
 *.swp
 url.txt
 test.xml
+test.sh
 /feeds/

@@ -49,7 +49,7 @@ defmodule Feedistiller.FeedAttributes do
     with the same name as the feed). Default is `.` (current directory)
   - `max_simultaneous_downloads:` the maximum number of item to download at the same time (default is 3)
   - `filters:` the filters applied to the feed
-  - `tiemout:` timeout applied to http operations
+  - `timeout:` timeout applied to http operations
   """
 
   defstruct name: "", url: "", filters: %Feedistiller.Filters{},
@@ -65,8 +65,8 @@ defmodule Feedistiller.Event do
   Events reported by the downloaders.
   """
 
-  defstruct destination: "", entry: %Feedistiller.Feeder.Entry{}, event: nil
-  @type t :: %__MODULE__{destination: String.t, entry: Feedistiller.Feeder.Entry.t, event: nil | tuple}
+  defstruct feed: %Feedistiller.FeedAttributes{}, destination: "", entry: %Feedistiller.Feeder.Entry{}, event: nil
+  @type t :: %__MODULE__{feed: Feedistiller.FeedAttributes.t, destination: String.t, entry: Feedistiller.Feeder.Entry.t, event: nil | tuple}
 end
 
 defmodule Feedistiller do
@@ -155,7 +155,7 @@ defmodule Feedistiller do
       :ok = File.mkdir_p(destination)
     rescue
       e ->
-        GenEvent.ack_notify(Feedistiller.Reporter, %Event{event: {:error_destination, destination}})
+        GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: {:error_destination, destination}})
         raise e
     end
 
@@ -167,7 +167,7 @@ defmodule Feedistiller do
     spawn(fn -> generate_chunks_stream(chunksq, feed, semaphores) end)
 
     # Parse the feed and stream it to the entry queue
-    spawn(fn -> generate_entries_stream(entriesq, chunksq, feed.url) end)
+    spawn(fn -> generate_entries_stream(entriesq, chunksq, feed) end)
 
     # Filter feed entries
     entries = entriesq
@@ -193,7 +193,7 @@ defmodule Feedistiller do
   defp generate_chunks_stream(chunks, feed, semaphores) do
     try do
       acquire(semaphores)
-      GenEvent.ack_notify(Feedistiller.Reporter, %Event{event: {:begin_feed, feed.name}})
+      GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: :begin_feed})
       Http.stream_get!(feed.url,
         fn (chunk, chunks) ->
           :ok = BlockingQueue.enqueue(chunks, chunk)
@@ -201,15 +201,15 @@ defmodule Feedistiller do
         end,
         chunks, feed.timeout, feed.user, feed.password)
     rescue
-      _ -> GenEvent.ack_notify(Feedistiller.Reporter, %Event{event: {:bad_url, feed.url}})
+      _ -> GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: :bad_url})
     after
       BlockingQueue.complete(chunks)
       release(semaphores)
-      GenEvent.ack_notify(Feedistiller.Reporter, %Event{event: {:end_feed, feed.name}})
+      GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: :end_feed})
     end
   end
 
-  defp generate_entries_stream(entries, chunks, url) do
+  defp generate_entries_stream(entries, chunks, feed) do
     try do
       Feeder.stream(
         [
@@ -226,14 +226,14 @@ defmodule Feedistiller do
               {:ok, chunk} -> {chunk, chunks}
               state ->
                 if state == :error do
-                  GenEvent.ack_notify(Feedistiller.Reporter, %Event{event: {:bad_feed, url}})
+                  GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: :bad_feed})
                 end
                 {"", chunks}
             end
           end
         ])
     rescue
-      _ -> GenEvent.ack_notify(Feedistiller.Reporter, %Event{event: {:bad_feed, url}})
+      _ -> GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: :bad_feed})
     after # whatever happens we complete the entry queue
       BlockingQueue.complete(entries)
     end
@@ -281,7 +281,7 @@ defmodule Feedistiller do
     CountDown.increase(countdown)
     spawn_link(fn -> 
       filename = filename(entry, destination)
-      GenEvent.ack_notify(Feedistiller.Reporter, %Event{destination: destination, entry: entry, event: {:begin, filename}})
+      GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, destination: destination, entry: entry, event: {:begin, filename}})
       get_enclosure(filename, entry, feed)
       CountDown.signal(countdown)
       release(semaphores)
@@ -290,7 +290,7 @@ defmodule Feedistiller do
 
   # Fetch an enclosure and save it
   defp get_enclosure(filename, entry, feed) do
-    event = %Event{destination: Path.dirname(filename), entry: entry}
+    event = %Event{feed: feed, destination: Path.dirname(filename), entry: entry}
     tmp_filename = filename <> ".tmp"
     case File.open(tmp_filename, [:write]) do
       {:ok, file} ->
@@ -326,6 +326,7 @@ defmodule Feedistiller do
     end
     CountDown.wait(countdown)
     CountDown.destroy(countdown)
+    GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: :end_enclosures})
   end
   
   defp get_sem(max) do

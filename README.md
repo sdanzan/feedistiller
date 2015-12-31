@@ -31,6 +31,7 @@ Example:
 >                        --filter-content-type "audio/mpeg" --feed-url http://some_feed.rss`
 
 See `mix run feedistiller --help` or `Feedistiller.CLI.help` for more informations.
+You can optionally start a GUI for visual feedback with the `--gui` option.
 
 Alternatively you can build the `feedistiller` standalone executable using `mix escript.build`
 and run it as `feedistiller [OPTIONS]`.
@@ -68,7 +69,7 @@ Or use the Hex package:
   1. Add feedistiller to your list of dependencies in `mix.exs`:
 
         def deps do
-          [{:feedistiller, "~> 1.0.0"}]
+          [{:feedistiller, "~> 2.0.0"}]
         end
 
   2. Ensure feedistiller is started before your application:

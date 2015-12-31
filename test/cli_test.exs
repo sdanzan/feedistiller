@@ -29,49 +29,55 @@ defmodule Feedistiller.CLI.Test do
                 "--feed-url", "url-3", "--filter-name", "foo", "--min-date", "2015-12-12 12:12:12", "--filter-name", "bar", "--max-date", "2015-12-13 13:13:13",
               ]
 
-    {:feeds, [global: g, feeds: feeds]} = CLI.parse_argv(options)
+    for gui <- [false, true] do
+      if gui do
+        options = ["--gui" | options]
+      end
 
-    assert g.destination == Path.expand("destination")
-    assert g.max_simultaneous_downloads == 14
-    assert g.url == ""
-    assert g.user == ""
-    assert g.password == ""
-    assert g.name == "ALL"
-    refute g.only_new
-    assert g.timeout == 40
-    
-    [f1, f2, f3] = feeds
+      {:feeds, [global: g, feeds: feeds], ^gui} = CLI.parse_argv(options)
 
-    assert f1.url == "url-1"
-    assert f1.destination == Path.expand("destination")
-    assert f1.max_simultaneous_downloads == 2
-    assert f1.filters.limits.max == 3
-    assert f1.filters.limits.from == :oldest
-    assert f1.filters.limits.to == :latest
-    assert f1.filters.mime == []
-    assert f1.filters.name == []
-    assert f1.user == "Bilbo"
-    assert f1.password == "SauronSux"
-    assert f1.name == "Le super podcast"
-    refute f1.only_new
-    assert f1.timeout == 40
+      assert g.destination == Path.expand("destination")
+      assert g.max_simultaneous_downloads == 14
+      assert g.url == ""
+      assert g.user == ""
+      assert g.password == ""
+      assert g.name == "ALL"
+      refute g.only_new
+      assert g.timeout == 40
+      
+      [f1, f2, f3] = feeds
 
-    assert f2.url == "url-2"
-    assert f2.destination == Path.expand("destination-2")
-    assert f2.max_simultaneous_downloads == 3
-    assert f2.filters.limits.max == :unlimited
-    assert f2.filters.mime == [~r/^audio/]
-    assert f2.name == "ALL"
-    assert f2.only_new
-    assert f2.timeout == 40
+      assert f1.url == "url-1"
+      assert f1.destination == Path.expand("destination")
+      assert f1.max_simultaneous_downloads == 2
+      assert f1.filters.limits.max == 3
+      assert f1.filters.limits.from == :oldest
+      assert f1.filters.limits.to == :latest
+      assert f1.filters.mime == []
+      assert f1.filters.name == []
+      assert f1.user == "Bilbo"
+      assert f1.password == "SauronSux"
+      assert f1.name == "Le super podcast"
+      refute f1.only_new
+      assert f1.timeout == 40
 
-    assert f3.url == "url-3"
-    assert f3.filters.name == [~r/bar/, ~r/foo/]
-    assert f3.filters.limits.max == 15
-    assert f3.filters.limits.from == Timex.DateFormat.parse!("2015-12-12 12:12:12", @format)
-    assert f3.filters.limits.to == Timex.DateFormat.parse!("2015-12-13 13:13:13", @format)
-    refute f3.only_new
-    assert f3.timeout == 40
+      assert f2.url == "url-2"
+      assert f2.destination == Path.expand("destination-2")
+      assert f2.max_simultaneous_downloads == 3
+      assert f2.filters.limits.max == :unlimited
+      assert f2.filters.mime == [~r/^audio/]
+      assert f2.name == "ALL"
+      assert f2.only_new
+      assert f2.timeout == 40
+
+      assert f3.url == "url-3"
+      assert f3.filters.name == [~r/bar/, ~r/foo/]
+      assert f3.filters.limits.max == 15
+      assert f3.filters.limits.from == Timex.DateFormat.parse!("2015-12-12 12:12:12", @format)
+      assert f3.filters.limits.to == Timex.DateFormat.parse!("2015-12-13 13:13:13", @format)
+      refute f3.only_new
+      assert f3.timeout == 40
+    end
   end
 
   defp get_feed_data do

@@ -32,12 +32,10 @@ defmodule Feedistiller.Reporter do
     
     def start_link do
       pid = spawn_link(fn ->
-        for %Feedistiller.Event{destination: _dest, entry: entry, event: event} <- Feedistiller.Reporter.stream do
+        for %Feedistiller.Event{entry: entry, event: event} <- Feedistiller.Reporter.stream do
           case event do
             {:begin, _filename} ->
               Agent.cast(Reported, fn state -> %{state | download: state.download + 1} end)
-            {:write, _filename, _written} ->
-              nil
             {:finish_write, _filename, written} ->
               Agent.cast(Reported, fn state -> 
                 state = %{state | 
@@ -56,7 +54,7 @@ defmodule Feedistiller.Reporter do
                   total_bytes: state.total_bytes + written
                 }
               end)
-            {bad, _} when bad in [:error_destination, :bad_url, :bad_feed] ->
+            bad when bad in [:error_destination, :bad_url, :bad_feed] ->
               Agent.cast(Reported, fn state -> %{state | errors: state.errors + 1} end)
             _ -> nil
           end
@@ -91,12 +89,10 @@ defmodule Feedistiller.Reporter do
     Task.async(&sync_log_to_logger/0)
   end
 
-  defp log(%Feedistiller.Event{destination: destination, entry: entry, event: event}, log_info, log_error) do
+  defp log(%Feedistiller.Event{feed: feed, destination: destination, entry: entry, event: event}, log_info, log_error) do
     case event do
-      {:begin_feed, feed_name} ->
-        log_info.("Starting downloading feed #{feed_name}\n")
-      {:end_feed, feed_name} ->
-        log_info.("Finished downloading feed #{feed_name}\n")
+      :begin_feed -> log_info.("Starting downloading feed #{feed.name}\n")
+      :end_feed -> log_info.("Finished downloading feed #{feed.name}\n")
       {:begin, filename} ->
         log_info.("Starting download for `#{entry.title}`")
         log_info.("URL: #{entry.enclosure.url}")
@@ -114,12 +110,9 @@ defmodule Feedistiller.Reporter do
       {:error_write, filename, _written, exception} ->
         log_error.("Error while writing to `#{Path.basename(filename)}` (complete path: `#{filename}`)")
         log_error.("Exception: #{inspect exception}")
-      {:error_destination, destination} ->
-        log_error.("Destination unavailable: `#{destination}`")
-      {:bad_url, url} ->
-        log_error.("Feed unavailable at #{url}")
-      {:bad_feed, url} ->
-        log_error.("Incomplete feed at #{url}")
+      {:error_destination, destination} -> log_error.("Destination unavailable: `#{destination}`")
+      :bad_url -> log_error.("Feed unavailable at #{feed.url}")
+      :bad_feed -> log_error.("Incomplete feed at #{feed.url}")
       _ -> nil
     end
   end

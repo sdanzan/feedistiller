@@ -57,6 +57,7 @@ defmodule Feedistiller.CLI do
   --only-new         : only new files are downloaded. Check is only done against
                        the required destination.
   --timeout          : timeout in seconds for the http operations. Default to 60s.
+  --gui              : show the graphic interface.
   """
 
   @doc "Entry point"
@@ -66,21 +67,31 @@ defmodule Feedistiller.CLI do
       case parse_argv(argv) do
         {:help, help_message} ->
           IO.puts(help_message)
-        {:feeds, [_, {:feeds, []}]} ->
+        {:feeds, [_, {:feeds, []}], _} ->
           IO.puts(@help)
-        {:feeds, feeds} ->
+        {:feeds, feeds, gui} ->
           Feedistiller.Reporter.log_to_stdout
+          if gui do
+            {:ok, _} = GenServer.start_link(Feedistiller.GUI, {self, Feedistiller.Reporter.stream})
+          end
           case feeds[:global].max_simultaneous_downloads do
             :unlimited ->
               Feedistiller.download_feeds(feeds[:feeds])
             max ->
               Feedistiller.download_feeds(feeds[:feeds], max)
           end
+          IO.puts("Finished!")
           report = Agent.get(Feedistiller.Reporter.Reported, fn s -> s end)
           IO.puts("Downloaded files: #{report.download} (#{report.download_successful} successful)")
           IO.puts("Total downloaded bytes: #{report.total_bytes}")
           if report.errors >= 0 do
             IO.puts("Errors: #{report.errors}")
+          end
+          if gui do
+            GenEvent.ack_notify(Feedistiller.Reporter, %Feedistiller.Event{event: :complete})
+            receive do
+              :close -> nil
+            end
           end
       end
     rescue
@@ -107,7 +118,7 @@ defmodule Feedistiller.CLI do
       global_config = %FeedAttributes{max_simultaneous_downloads: :unlimited}
       {options, global_config} = parse_feed_attributes({parsed, global_config})
       feeds = parse_feeds_config(options, global_config, []) |> :lists.reverse
-      {:feeds, [global: global_config, feeds: feeds]}
+      {:feeds, [global: global_config, feeds: feeds], check_gui(parsed)}
     end
   end
 
@@ -115,16 +126,24 @@ defmodule Feedistiller.CLI do
     {:help, @help}
   end
 
-  defp check_help([]) do
+  defp check_atom(_, []) do
     false
   end
 
-  defp check_help([{:help, true} | _]) do
+  defp check_atom(atom, [{atom, true} | _]) do
     true
   end
 
-  defp check_help([_ | options]) do
+  defp check_atom(_, [_ | options]) do
     check_help(options)
+  end
+
+  defp check_help(options) do
+    check_atom(:help, options)
+  end
+
+  defp check_gui(options) do
+    check_atom(:gui, options)
   end
 
   defp parse_feeds_config([], _, feeds), do: feeds
@@ -199,6 +218,7 @@ defmodule Feedistiller.CLI do
       user: :keep,
       password: :keep,
       help: :boolean,
+      gui: :boolean,
       only_new: [:boolean, :keep],
       timeout: [:integer, :keep],
     ]
