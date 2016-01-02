@@ -20,6 +20,7 @@ defmodule Feedistiller.GUI do
   """
 
   use GenServer
+  import Feedistiller.Util
   alias Feedistiller.Event
   alias Feedistiller.GUI
 
@@ -29,7 +30,7 @@ defmodule Feedistiller.GUI do
   @yellow {255, 255, 0}
 
   defstruct wx: nil, frame: nil,
-            data: %{current: 0, total: 0, total_bytes: 0, finished: 0, complete: false},
+            data: %{current: 0, total: 0, total_bytes: 0, finished: 0, complete: false, time: nil},
             feeds: %{page: nil, sizer: nil, f: HashDict.new()},
             items: %{page: nil, sizer: nil, i: HashDict.new()}
 
@@ -44,23 +45,27 @@ defmodule Feedistiller.GUI do
   defp percent(current, expected), do: div(current * 100, expected)
 
   defp listen(pid, stream) do
-    for event <- stream do
-      GenServer.cast(pid, event)
-    end
+    for event <- stream, do: GenServer.cast(pid, event)
   end
 
   defp set_status_text(f, data) do
-    :wxFrame.setStatusText(f, String.to_char_list(
-      "Downloaded: #{data.total} - Downloading: #{data.current} - Bytes: #{data.total_bytes} (#{hrbytes(data.total_bytes)}) - Finished: #{data.finished}"))
+    if data.complete do
+      :wxFrame.setStatusText(f, String.to_char_list(
+        "Downloaded: #{data.total} - Downloading: finished - Bytes: #{data.total_bytes} (#{hrbytes(data.total_bytes)}) - Finished: #{data.finished} - Time: #{tformat(data.time)}"))
+    else
+      :wxFrame.setStatusText(f, String.to_char_list(
+        "Downloaded: #{data.total} - Downloading: #{data.current} - Bytes: #{data.total_bytes} (#{hrbytes(data.total_bytes)}) - Finished: #{data.finished}"))
+    end
   end
 
   defp set_header_text(feed, info) do
     s = "#{feed.name}\nDestination: #{Path.join(feed.destination, feed.name)}\nDownloaded: #{info.total}"
     if info.complete do
-      s = s <> " (finished)"
+      s = s <> "\nDownloading: finished (time: #{tformat(info.time)})"
       :wxStaticText.setBackgroundColour(info.header, @green)
+    else
+      s = s <> "\nDownloading: #{info.current}"
     end
-    s = s <> "\nDownloading: #{info.current}"
     s = s <> "\nBytes: #{info.bytes} (#{hrbytes(info.bytes)})#{}"
     :wxStaticText.setLabel(info.header, String.to_char_list(s))
   end
@@ -79,7 +84,7 @@ defmodule Feedistiller.GUI do
     pid = self
     :wxFrame.connect(f, :close_window, [callback: fn (_, _) -> GenServer.cast(pid, {:close, parent}) end]) 
     :wxFrame.createStatusBar(f)
-    set_status_text(f, %{current: 0, total: 0, total_bytes: 0, finished: 0, complete: false})
+    set_status_text(f, %{current: 0, total: 0, total_bytes: 0, finished: 0, complete: false, time: nil})
     t = :wxNotebook.new(f, -1)
 
     {p1, s1} = panel(t)
@@ -121,7 +126,8 @@ defmodule Feedistiller.GUI do
       current: 0,
       total: 0,
       bytes: 0,
-      complete: false
+      complete: false,
+      time: nil
     }
     set_header_text(event.feed, info)
 
@@ -137,10 +143,10 @@ defmodule Feedistiller.GUI do
   end
 
   # A feed finished downloading enclosures
-  def handle_cast(event = %Event{event: :end_enclosures}, state = %GUI{}) do
+  def handle_cast(event = %Event{event: {:end_enclosures, time}}, state = %GUI{}) do
     state = %GUI{state | data: %{state.data | finished: state.data.finished + 1}}
     set_status_text(state.frame, state.data)
-    info = %{HashDict.fetch!(state.feeds.f, event.feed.name) | complete: true}
+    info = %{HashDict.fetch!(state.feeds.f, event.feed.name) | complete: true, time: time}
     set_header_text(event.feed, info)
     :wxWindow.fitInside(state.feeds.page)
     {:noreply, %GUI{ state |
@@ -189,14 +195,13 @@ defmodule Feedistiller.GUI do
 
   # Write a chunk of enclosure data to the disk
   def handle_cast(event = %Event{event: {:write, filename, written}}, state = %GUI{}) do
-    {gauge, bytes, _} = HashDict.fetch!(state.items.i, filename)
-    :wxGauge.setValue(gauge, written)
-    :wxStaticText.setLabel(bytes, String.to_char_list("Bytes: #{written} (#{hrbytes(written)}) - #{percent(written, event.entry.enclosure.size)}%"))
+    handle_write(event, filename, written, nil, state)
     {:noreply, state}
   end
 
   # Finished downloading an enclosure
-  def handle_cast(event = %Event{event: {:finish_write, filename, written}}, state = %GUI{}) do
+  def handle_cast(event = %Event{event: {:finish_write, filename, written, time}}, state = %GUI{}) do
+    handle_write(event, filename, written, time, state)
     state = %GUI{state | 
       data: %{state.data | 
         current: state.data.current - 1, total: state.data.total + 1, total_bytes: state.data.total_bytes + written
@@ -218,15 +223,15 @@ defmodule Feedistiller.GUI do
   end
 
   # Error while writing to an enclosure file
-  def handle_cast(event = %Event{event: {:error_write, filename, written, _exception}}, state = %GUI{}) do
+  def handle_cast(event = %Event{event: {:error_write, filename, _exception}}, state = %GUI{}) do
     state = %GUI{state | 
       data: %{state.data | 
-        current: state.data.current - 1, total_bytes: state.data.total_bytes + written
+        current: state.data.current - 1
       }
     }
     set_status_text(state.frame, state.data)
     info = HashDict.fetch!(state.feeds.f, event.feed.name)
-    info = %{info | current: info.current - 1, bytes: info.bytes + written}
+    info = %{info | current: info.current - 1}
     set_header_text(event.feed, info)
     {_, _, gaugepanel} = HashDict.fetch!(state.items.i, filename)
     :wxPanel.setBackgroundColour(gaugepanel, @red)
@@ -255,8 +260,8 @@ defmodule Feedistiller.GUI do
   end
 
   # All complete
-  def handle_cast(%Event{event: :complete}, state = %GUI{}) do
-    state = %GUI{state | data: %{state.data | complete: true}}
+  def handle_cast(%Event{event: {:complete, timestamp}}, state = %GUI{}) do
+    state = %GUI{state | data: %{state.data | complete: true, time: timestamp}}
     set_status_text(state.frame, state.data)
     :wxFrame.setTitle(state.frame, 'Feedistiller - all complete')
     {:noreply, state}
@@ -264,6 +269,14 @@ defmodule Feedistiller.GUI do
 
   def handle_cast(_, state = %GUI{}) do
     {:noreply, state}
+  end
+
+  defp handle_write(event, filename, written, time, state) do
+    {gauge, bytes, _} = HashDict.fetch!(state.items.i, filename)
+    :wxGauge.setValue(gauge, written)
+    label = "Bytes: #{written} (#{hrbytes(written)}) - #{percent(written, event.entry.enclosure.size)}%"
+    if !is_nil(time), do: label = label <> " - Time: #{tformat(time)}"
+    :wxStaticText.setLabel(bytes, String.to_char_list(label))
   end
 
   defp handle_bad_feed(event, state) do

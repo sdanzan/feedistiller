@@ -18,6 +18,7 @@ defmodule Feedistiller.Reporter do
   """
 
   require Logger
+  import Feedistiller.Util
 
   @doc "The stream of download events"
   @spec stream() :: GenEvent.Stream.t
@@ -36,7 +37,7 @@ defmodule Feedistiller.Reporter do
           case event do
             {:begin, _filename} ->
               Agent.cast(Reported, fn state -> %{state | download: state.download + 1} end)
-            {:finish_write, _filename, written} ->
+            {:finish_write, _filename, written, _time} ->
               Agent.cast(Reported, fn state -> 
                 state = %{state | 
                   download_successful: state.download_successful + 1,
@@ -47,11 +48,10 @@ defmodule Feedistiller.Reporter do
                 end
                 state
               end)
-            {:error_write, _filename, written, _exception} ->
+            {:error_write, _filename, _exception} ->
               Agent.cast(Reported, fn state -> 
                 %{state | 
-                  errors: state.errors + 1,
-                  total_bytes: state.total_bytes + written
+                  errors: state.errors + 1
                 }
               end)
             bad when bad in [:error_destination, :bad_url, :bad_feed] ->
@@ -92,22 +92,24 @@ defmodule Feedistiller.Reporter do
   defp log(%Feedistiller.Event{feed: feed, destination: destination, entry: entry, event: event}, log_info, log_error) do
     case event do
       :begin_feed -> log_info.("Starting downloading feed #{feed.name}\n")
-      :end_feed -> log_info.("Finished downloading feed #{feed.name}\n")
+      {:end_feed, time} -> log_info.("Finished downloading feed #{feed.name} (#{tformat(time)})\n")
+      {:end_enclosures, time} -> log_info.("Finished downloading enclosures for #{feed.name} (#{tformat(time)})\n")
       {:begin, filename} ->
         log_info.("Starting download for `#{entry.title}`")
         log_info.("URL: #{entry.enclosure.url}")
         log_info.("Destination: `#{destination}`")
         log_info.("Saving to: `#{Path.basename(filename)}`")
         log_info.("Expected size: #{entry.enclosure.size}\n")
-      {:finish_write, _filename, written} ->
+      {:finish_write, _filename, written, time} ->
         log_info.("Download finished for `#{entry.title}`")
         expected = entry.enclosure.size
         if expected == written do
-          log_info.("Total bytes: #{expected}\n")
+          log_info.("Total bytes: #{expected}")
         else
-          log_error.("Total bytes: #{written}, expected: #{expected}\n")
+          log_error.("Total bytes: #{written}, expected: #{expected}")
         end
-      {:error_write, filename, _written, exception} ->
+        log_info.("Total time: #{tformat(time)}\n")
+      {:error_write, filename, exception} ->
         log_error.("Error while writing to `#{Path.basename(filename)}` (complete path: `#{filename}`)")
         log_error.("Exception: #{inspect exception}")
       {:error_destination, destination} -> log_error.("Destination unavailable: `#{destination}`")

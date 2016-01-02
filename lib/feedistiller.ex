@@ -69,6 +69,14 @@ defmodule Feedistiller.Event do
   @type t :: %__MODULE__{feed: Feedistiller.FeedAttributes.t, destination: String.t, entry: Feedistiller.Feeder.Entry.t, event: nil | tuple}
 end
 
+defmodule Feedistiller.Util do
+  use Timex
+
+  def tformat({m, s, _}) do
+    TimeFormat.format({m, s, 0}, :humanized)
+  end
+end
+
 defmodule Feedistiller do
   @moduledoc """
   Provides functions to downloads enclosures of rss/atom feeds.
@@ -84,6 +92,7 @@ defmodule Feedistiller do
   `HTTPoison` must be started to use `Feedistiller` functions.
   """
   
+  use Timex
   alias Feedistiller.FeedAttributes
   alias Feedistiller.Event
   alias Feedistiller.Http
@@ -191,22 +200,24 @@ defmodule Feedistiller do
   end
 
   defp generate_chunks_stream(chunks, feed, semaphores) do
-    try do
-      acquire(semaphores)
-      GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: :begin_feed})
-      Http.stream_get!(feed.url,
-        fn (chunk, chunks) ->
-          :ok = BlockingQueue.enqueue(chunks, chunk)
-          chunks
-        end,
-        chunks, feed.timeout, feed.user, feed.password)
-    rescue
-      _ -> GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: :bad_url})
-    after
-      BlockingQueue.complete(chunks)
-      release(semaphores)
-      GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: :end_feed})
-    end
+    {t, _} = Time.measure(fn ->
+      try do
+        acquire(semaphores)
+        GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: :begin_feed})
+        Http.stream_get!(feed.url,
+          fn (chunk, chunks) ->
+            :ok = BlockingQueue.enqueue(chunks, chunk)
+            chunks
+          end,
+          chunks, feed.timeout, feed.user, feed.password)
+      rescue
+        _ -> GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: :bad_url})
+      after
+        BlockingQueue.complete(chunks)
+        release(semaphores)
+      end
+    end)
+    GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: {:end_feed, t}})
   end
 
   defp generate_entries_stream(entries, chunks, feed) do
@@ -295,38 +306,44 @@ defmodule Feedistiller do
     case File.open(tmp_filename, [:write]) do
       {:ok, file} ->
         try do
-          {:ok, written} = Http.stream_get!(
+          {time, {:ok, {written, _}}} = Time.measure(fn -> Http.stream_get!(
             entry.enclosure.url,
-            fn chunk, current_size ->
+            fn chunk, {current_size, current_number} ->
               :ok = IO.binwrite(file, chunk)
               s = current_size + byte_size(chunk)
-              GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:write, filename, s}})
-              s
+              c = current_number + 1
+              if rem(c, 10) == 0 do
+                GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:write, filename, s}})
+              end
+              {s, c}
             end,
-            0,
+            {0, 0},
             feed.timeout, feed.user, feed.password)
-          GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:finish_write, filename, written}})
+          end)
           File.close(file)
           File.rename(tmp_filename, filename)
+          GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:finish_write, filename, written, time}})
         rescue
-          e -> GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:error_write, filename, 0, e}})
+          e -> GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:error_write, filename, e}})
           File.close(file)
           File.rm(tmp_filename)
         end
-      e -> GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:error_write, filename, 0, e}})
+      e -> GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:error_write, filename, e}})
     end
   end
 
   # Retrieve all enclosures
   defp get_enclosures(entries, destination, feed, semaphores) do
-    countdown = CountDown.create_link(0)
-    # fetch all enclosures, up to 'max' at the same time
-    for entry <- entries do
-      get_enclosure(entry, destination, feed, semaphores, countdown)
-    end
-    CountDown.wait(countdown)
-    CountDown.destroy(countdown)
-    GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: :end_enclosures})
+    {t, _} = Time.measure(fn ->
+      countdown = CountDown.create_link(0)
+      # fetch all enclosures, up to 'max' at the same time
+      for entry <- entries do
+        get_enclosure(entry, destination, feed, semaphores, countdown)
+      end
+      CountDown.wait(countdown)
+      CountDown.destroy(countdown)
+    end)
+    GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: {:end_enclosures, t}})
   end
   
   defp get_sem(max) do

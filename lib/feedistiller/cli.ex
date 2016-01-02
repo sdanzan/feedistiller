@@ -17,7 +17,10 @@ defmodule Feedistiller.CLI do
   Command line interface for Feedistiller.
   """
 
+  use Timex
+  import Feedistiller.Util
   alias Feedistiller.FeedAttributes
+
 
   @help """
   Download enclosures from a set of RSS/Atom feeds.
@@ -74,12 +77,14 @@ defmodule Feedistiller.CLI do
           if gui do
             {:ok, _} = GenServer.start_link(Feedistiller.GUI, {self, Feedistiller.Reporter.stream})
           end
-          case feeds[:global].max_simultaneous_downloads do
-            :unlimited ->
-              Feedistiller.download_feeds(feeds[:feeds])
-            max ->
-              Feedistiller.download_feeds(feeds[:feeds], max)
-          end
+          {timestamp, _} = Time.measure(fn ->
+            case feeds[:global].max_simultaneous_downloads do
+              :unlimited ->
+                Feedistiller.download_feeds(feeds[:feeds])
+              max ->
+                Feedistiller.download_feeds(feeds[:feeds], max)
+            end
+          end)
           IO.puts("Finished!")
           report = Agent.get(Feedistiller.Reporter.Reported, fn s -> s end)
           IO.puts("Downloaded files: #{report.download} (#{report.download_successful} successful)")
@@ -87,8 +92,9 @@ defmodule Feedistiller.CLI do
           if report.errors >= 0 do
             IO.puts("Errors: #{report.errors}")
           end
+          IO.puts("Time: #{tformat(timestamp)}")
           if gui do
-            GenEvent.ack_notify(Feedistiller.Reporter, %Feedistiller.Event{event: :complete})
+            GenEvent.ack_notify(Feedistiller.Reporter, %Feedistiller.Event{event: {:complete, timestamp}})
             receive do
               :close -> nil
             end
@@ -196,9 +202,9 @@ defmodule Feedistiller.CLI do
   end
 
   defp parse_date(date) do
-    case Timex.DateFormat.parse(date, "{ISOz}") do
+    case DateFormat.parse(date, "{ISOz}") do
       {:ok, date_time} -> date_time
-      _ -> case Timex.DateFormat.parse(date, "{YYYY}-{M}-{D} {h24}:{m}:{s}") do
+      _ -> case DateFormat.parse(date, "{YYYY}-{M}-{D} {h24}:{m}:{s}") do
         {:ok, date_time} -> date_time
       end
     end
