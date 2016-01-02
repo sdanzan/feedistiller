@@ -72,9 +72,15 @@ end
 defmodule Feedistiller.Util do
   use Timex
 
-  def tformat({m, s, _}) do
+  def tformat({m, s, mu})
+  when is_integer(m) and is_integer(s) and is_integer(mu)
+  do
     TimeFormat.format({m, s, 0}, :humanized)
   end
+  def tformat(_), do: ""
+
+  def dformat(date = %DateTime{}), do: DateFormat.format!(date, "%Y-%m-%d", :strftime)
+  def dformat(nil), do: "????-??-??"
 end
 
 defmodule Feedistiller do
@@ -168,8 +174,8 @@ defmodule Feedistiller do
         raise e
     end
 
-    chunksq = BlockingQueue.create(10)
-    entriesq = BlockingQueue.create(10)
+    chunksq = BlockingQueue.create(100)
+    entriesq = BlockingQueue.create(100)
     semaphores = [global_sem: global_sem, local_sem: get_sem(feed.max_simultaneous_downloads)]
 
     # Download feed and gather chunks in a shared queue
@@ -228,6 +234,9 @@ defmodule Feedistiller do
           event_fun: fn
             (entry = %Feeder.Entry{}, entries) -> 
               BlockingQueue.enqueue(entries, entry)
+              entries
+            (channel = %Feeder.Feed{}, entries) ->
+              GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: {:channel_complete, channel}})
               entries
             (_, entries) -> entries
           end,

@@ -59,7 +59,11 @@ defmodule Feedistiller.GUI do
   end
 
   defp set_header_text(feed, info) do
-    s = "#{feed.name}\nDestination: #{Path.join(feed.destination, feed.name)}\nDownloaded: #{info.total}"
+    s = "#{feed.name}"
+    if info.channel do
+      s = s <> " (\"#{info.channel.title}\")"
+    end
+    s = s <> "\nDestination: #{Path.join(feed.destination, feed.name)}\nDownloaded: #{info.total}"
     if info.complete do
       s = s <> "\nDownloading: finished (time: #{tformat(info.time)})"
       :wxStaticText.setBackgroundColour(info.header, @green)
@@ -127,7 +131,8 @@ defmodule Feedistiller.GUI do
       total: 0,
       bytes: 0,
       complete: false,
-      time: nil
+      time: nil,
+      channel: nil
     }
     set_header_text(event.feed, info)
 
@@ -136,6 +141,19 @@ defmodule Feedistiller.GUI do
 
     {:noreply, %GUI{state |
         feeds: %{state.feeds |
+          f: HashDict.put(state.feeds.f, event.feed.name, info)
+        }
+      }
+    }
+  end
+
+  # Got a complete channel
+  def handle_cast(event = %Event{event: {:channel_complete, channel}}, state = %GUI{}) do
+    info = %{HashDict.fetch!(state.feeds.f, event.feed.name) | channel: channel}
+    set_header_text(event.feed, info)
+    :wxWindow.fitInside(state.feeds.page)
+    {:noreply, %GUI{ state |
+        feeds: %{ state.feeds |
           f: HashDict.put(state.feeds.f, event.feed.name, info)
         }
       }
@@ -168,7 +186,8 @@ defmodule Feedistiller.GUI do
     inpanel = :wxPanel.new(state.items.page)
     insizer = :wxBoxSizer.new(:wx_const.wx_vertical)
     :wxPanel.setSizer(inpanel, insizer)
-    :wxBoxSizer.add(insizer, :wxStaticText.new(inpanel, -1, String.to_char_list(event.feed.name <> " - " <> event.entry.title)))
+    name = event.feed.name <> " - " <> dformat(event.entry.updated) <> ": " <> event.entry.title
+    :wxBoxSizer.add(insizer, :wxStaticText.new(inpanel, -1, String.to_char_list(name)))
     gauge = :wxGauge.new(inpanel, -1, event.entry.enclosure.size)
     flags = :wxSizerFlags.new |> :wxSizerFlags.expand
     :wxBoxSizer.add(insizer, gauge, flags)
@@ -183,6 +202,8 @@ defmodule Feedistiller.GUI do
 
     # Refresh view
     :wxWindow.fitInside(state.items.page)
+    h = :wxWindow.getScrollRange(state.items.page, :wx_const.wx_vertical)
+    :wxScrolledWindow.scroll(state.items.page, 0, h)
     
     state = %GUI{state |
         data: %{state.data | current: state.data.current + 1},

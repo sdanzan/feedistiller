@@ -96,6 +96,7 @@ defmodule Feedistiller.Reporter do
       {:end_enclosures, time} -> log_info.("Finished downloading enclosures for #{feed.name} (#{tformat(time)})\n")
       {:begin, filename} ->
         log_info.("Starting download for `#{entry.title}`")
+        log_info.("Updated: #{dformat(entry.updated)}")
         log_info.("URL: #{entry.enclosure.url}")
         log_info.("Destination: `#{destination}`")
         log_info.("Saving to: `#{Path.basename(filename)}`")
