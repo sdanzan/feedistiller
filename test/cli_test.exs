@@ -31,7 +31,8 @@ defmodule Feedistiller.CLI.Test do
 
     for gui <- [false, true] do
       if gui do
-        options = ["--gui" | options]
+        [p1, p2 | options] = options
+        options = [p1, p2, "--gui" | options]
       end
 
       {:feeds, [global: g, feeds: feeds], ^gui} = CLI.parse_argv(options)

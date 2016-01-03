@@ -132,17 +132,9 @@ defmodule Feedistiller.CLI do
     {:help, @help}
   end
 
-  defp check_atom(_, []) do
-    false
-  end
-
-  defp check_atom(atom, [{atom, true} | _]) do
-    true
-  end
-
-  defp check_atom(_, [_ | options]) do
-    check_help(options)
-  end
+  defp check_atom(_, []), do: false
+  defp check_atom(atom, [{atom, true} | _]), do: true
+  defp check_atom(atom, [_ | options]), do: check_atom(atom, options)
 
   defp check_help(options) do
     check_atom(:help, options)
