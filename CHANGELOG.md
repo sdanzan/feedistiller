@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.1 (2016-01-03
+
+* Better gui feedback
+* Command line parsing bug fix
+
 ## 2.0.0 (2016-01-01)
 
 * Optional graphic interface for feedback
