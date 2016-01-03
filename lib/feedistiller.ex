@@ -174,28 +174,24 @@ defmodule Feedistiller do
         raise e
     end
 
-    chunksq = BlockingQueue.create(100)
-    entriesq = BlockingQueue.create(100)
+    chunksq = BlockingQueue.create(10)
+    entriesq = BlockingQueue.create()
+    entries = entriesq
     semaphores = [global_sem: global_sem, local_sem: get_sem(feed.max_simultaneous_downloads)]
 
     # Download feed and gather chunks in a shared queue
     spawn(fn -> generate_chunks_stream(chunksq, feed, semaphores) end)
 
-    # Parse the feed and stream it to the entry queue
-    spawn(fn -> generate_entries_stream(entriesq, chunksq, feed) end)
+    # Filters
+    titlematch = for regex <- feed.filters.name, do: &Regex.match?(regex, &1.title)
+    typematch = for regex <- feed.filters.mime, do: &Regex.match?(regex, &1.enclosure.type)
+    filters = typematch ++ titlematch
+    filters = [fn e -> !(feed.only_new and File.exists?(filename(e, destination))) end | filters]
+    filters = [(&filter_feed_entry(&1, {feed.filters.limits.from, feed.filters.limits.to})) | filters]
+    filters = [fn e -> !is_nil(e.enclosure) end | filters]
 
-    # Filter feed entries
-    entries = entriesq
-              |> Stream.filter(fn e -> !is_nil(e.enclosure) end)
-              |> Stream.filter(&filter_feed_entry(&1, {feed.filters.limits.from, feed.filters.limits.to}))
-              |> Stream.filter(fn e -> !(feed.only_new and File.exists?(filename(e, destination))) end)
-    entries = Enum.reduce(feed.filters.mime, entries,
-      fn (regex, entries) -> entries |> Stream.filter(&Regex.match?(regex, &1.enclosure.type)) end)
-    entries = Enum.reduce(feed.filters.name, entries,
-      fn (regex, entries) -> entries |> Stream.filter(&Regex.match?(regex, &1.title)) end)
-    if feed.filters.limits.max != :unlimited do
-      entries = entries |> Stream.take(feed.filters.limits.max)
-    end
+    # Parse the feed and filter/stream it to the entry queue
+    spawn(fn -> generate_entries_stream(entriesq, chunksq, feed, filters) end)
     
     # and get all!
     get_enclosures(entries, destination, feed, semaphores)
@@ -226,19 +222,29 @@ defmodule Feedistiller do
     GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: {:end_feed, t}})
   end
 
-  defp generate_entries_stream(entries, chunks, feed) do
+  defp match_filters(_, []), do: true
+  defp match_filters(e, [filter | filters]) do
+    filter.(e) && match_filters(e, filters)
+  end
+
+  defp generate_entries_stream(entries, chunks, feed, filters) do
     try do
+      max = if feed.filters.limits.max == :unlimited, do: 999999999999, else: feed.filters.limits.max
       Feeder.stream(
         [
-          event_state: entries,
+          event_state: {entries, 0},
           event_fun: fn
-            (entry = %Feeder.Entry{}, entries) -> 
-              BlockingQueue.enqueue(entries, entry)
-              entries
-            (channel = %Feeder.Feed{}, entries) ->
+            (entry = %Feeder.Entry{}, {entries, count}) -> 
+              if count < max && match_filters(entry, filters) do
+                BlockingQueue.enqueue(entries, entry)
+                {entries, count + 1}
+              else
+                {entries, count}
+              end
+            (channel = %Feeder.Feed{}, state) ->
               GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: {:channel_complete, channel}})
-              entries
-            (_, entries) -> entries
+              state
+            (_, state) -> state
           end,
           continuation_state: chunks,
           continuation_fun: fn chunks ->
