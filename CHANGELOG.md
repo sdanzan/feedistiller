@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.2
+
+* Bug fixes
+    - enclosures with no size set no longer
+      make the program crash
+* Progress bars less often refreshed to avoid
+  overloading the UI management process
+
 ## 2.0.1 (2016-01-03
 
 * Better gui feedback

@@ -314,6 +314,8 @@ defmodule Feedistiller do
     end)
   end
 
+  @chunk_limit 64 * 1024
+
   # Fetch an enclosure and save it
   defp get_enclosure(filename, entry, feed) do
     event = %Event{feed: feed, destination: Path.dirname(filename), entry: entry}
@@ -323,12 +325,13 @@ defmodule Feedistiller do
         try do
           {time, {:ok, {written, _}}} = Time.measure(fn -> Http.stream_get!(
             entry.enclosure.url,
-            fn chunk, {current_size, current_number} ->
+            fn chunk, {current_size, current_chunk} ->
               :ok = IO.binwrite(file, chunk)
               s = current_size + byte_size(chunk)
-              c = current_number + 1
-              if rem(c, 10) == 0 do
+              c = current_chunk + byte_size(chunk)
+              if c > @chunk_limit do
                 GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:write, filename, s}})
+                c = 0
               end
               {s, c}
             end,

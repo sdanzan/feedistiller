@@ -5,7 +5,7 @@ defmodule Feedistiller.Mixfile do
 
   def project do
     [app: :feedistiller,
-     version: "2.0.1",
+     version: "2.0.2",
      description: @description,
      package: package,
      elixir: "~> 1.1",

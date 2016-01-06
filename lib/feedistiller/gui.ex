@@ -188,7 +188,10 @@ defmodule Feedistiller.GUI do
     :wxPanel.setSizer(inpanel, insizer)
     name = event.feed.name <> " - " <> dformat(event.entry.updated) <> ": " <> event.entry.title
     :wxBoxSizer.add(insizer, :wxStaticText.new(inpanel, -1, String.to_char_list(name)))
-    gauge = :wxGauge.new(inpanel, -1, event.entry.enclosure.size)
+    size = event.entry.enclosure.size
+    gauge = :wxGauge.new(inpanel, -1, (if size, do: size, else: -1))
+    updater = fn v -> :wxGauge.setValue(gauge, v) end
+    if !size, do: updater = fn v -> :wxGauge.pulse(gauge) end
     flags = :wxSizerFlags.new |> :wxSizerFlags.expand
     :wxBoxSizer.add(insizer, gauge, flags)
     bytes = :wxStaticText.new(inpanel, -1, 'Bytes: 0')
@@ -208,7 +211,7 @@ defmodule Feedistiller.GUI do
     state = %GUI{state |
         data: %{state.data | current: state.data.current + 1},
         feeds: %{state.feeds | f: HashDict.put(state.feeds.f, event.feed.name, info)},
-        items: %{state.items | i: HashDict.put(state.items.i, filename, {gauge, bytes, inpanel})}
+        items: %{state.items | i: HashDict.put(state.items.i, filename, {updater, bytes, inpanel})}
       }
     set_status_text(state.frame, state.data)
     {:noreply, state}
@@ -293,9 +296,10 @@ defmodule Feedistiller.GUI do
   end
 
   defp handle_write(event, filename, written, time, state) do
-    {gauge, bytes, _} = HashDict.fetch!(state.items.i, filename)
-    :wxGauge.setValue(gauge, written)
-    label = "Bytes: #{written} (#{hrbytes(written)}) - #{percent(written, event.entry.enclosure.size)}%"
+    {updater, bytes, _} = HashDict.fetch!(state.items.i, filename)
+    updater.(written)
+    label = "Bytes: #{written} (#{hrbytes(written)})"
+    if event.entry.enclosure.size, do: label = label <> " - #{percent(written, event.entry.enclosure.size)}%"
     if !is_nil(time), do: label = label <> " - Time: #{tformat(time)}"
     :wxStaticText.setLabel(bytes, String.to_char_list(label))
   end
