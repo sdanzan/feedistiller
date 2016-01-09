@@ -22,6 +22,7 @@ defmodule Feedistiller.GUI do
   use GenServer
   import Feedistiller.Util
   alias Feedistiller.Event
+  alias Feedistiller.Feeder
   alias Feedistiller.GUI
 
   @red {255, 0, 0}
@@ -70,7 +71,8 @@ defmodule Feedistiller.GUI do
     else
       s = s <> "\nDownloading: #{info.current}"
     end
-    s = s <> "\nBytes: #{info.bytes} (#{hrbytes(info.bytes)})#{}"
+    s = s <> "\nBytes: #{info.bytes}"
+    if info.bytes >= 1024, do: s = s <> " (#{hrbytes(info.bytes)})#{}"
     :wxStaticText.setLabel(info.header, String.to_char_list(s))
   end
 
@@ -188,13 +190,12 @@ defmodule Feedistiller.GUI do
     :wxPanel.setSizer(inpanel, insizer)
     name = event.feed.name <> " - " <> dformat(event.entry.updated) <> ": " <> event.entry.title
     :wxBoxSizer.add(insizer, :wxStaticText.new(inpanel, -1, String.to_char_list(name)))
-    size = case event.entry.enclosure.size do
-      s when s < 1 -> nil
-      s -> s
+    gauge = :wxGauge.new(inpanel, -1, -1)
+    case event.entry.enclosure.size do
+      nil -> :wxGauge.pulse(gauge)
+      s when s <= 0 -> :wxGauge.pulse(gauge)
+      s -> :wxGauge.setRange(gauge, s)
     end
-    gauge = :wxGauge.new(inpanel, -1, (if size, do: size, else: -1))
-    updater = fn v -> :wxGauge.setValue(gauge, v) end
-    if !size, do: updater = fn v -> :wxGauge.pulse(gauge) end
     flags = :wxSizerFlags.new |> :wxSizerFlags.expand
     :wxBoxSizer.add(insizer, gauge, flags)
     bytes = :wxStaticText.new(inpanel, -1, 'Bytes: 0')
@@ -214,7 +215,7 @@ defmodule Feedistiller.GUI do
     state = %GUI{state |
         data: %{state.data | current: state.data.current + 1},
         feeds: %{state.feeds | f: HashDict.put(state.feeds.f, event.feed.name, info)},
-        items: %{state.items | i: HashDict.put(state.items.i, filename, {updater, bytes, inpanel})}
+        items: %{state.items | i: HashDict.put(state.items.i, filename, {gauge, bytes, inpanel})}
       }
     set_status_text(state.frame, state.data)
     {:noreply, state}
@@ -228,6 +229,13 @@ defmodule Feedistiller.GUI do
 
   # Finished downloading an enclosure
   def handle_cast(event = %Event{event: {:finish_write, filename, written, time}}, state = %GUI{}) do
+    if !event.entry.enclosure.size || event.entry.enclosure.size <= 0 do
+      event = %Event{event | 
+        entry: %Feeder.Entry{event.entry | 
+          enclosure: %Feeder.Enclosure{event.entry.enclosure | size: written}
+        }
+      }
+    end
     handle_write(event, filename, written, time, state)
     state = %GUI{state | 
       data: %{state.data | 
@@ -299,11 +307,11 @@ defmodule Feedistiller.GUI do
   end
 
   defp handle_write(event, filename, written, time, state) do
-    {updater, bytes, _} = HashDict.fetch!(state.items.i, filename)
-    updater.(written)
+    {gauge, bytes, _} = HashDict.fetch!(state.items.i, filename)
     label = "Bytes: #{written} (#{hrbytes(written)})"
     if event.entry.enclosure.size && event.entry.enclosure.size > 0 do
       label = label <> " - #{percent(written, event.entry.enclosure.size)}%"
+      :wxGauge.setValue(gauge, written)
     end
     if !is_nil(time), do: label = label <> " - Time: #{tformat(time)}"
     :wxStaticText.setLabel(bytes, String.to_char_list(label))
