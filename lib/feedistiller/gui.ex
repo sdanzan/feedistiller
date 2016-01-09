@@ -188,7 +188,10 @@ defmodule Feedistiller.GUI do
     :wxPanel.setSizer(inpanel, insizer)
     name = event.feed.name <> " - " <> dformat(event.entry.updated) <> ": " <> event.entry.title
     :wxBoxSizer.add(insizer, :wxStaticText.new(inpanel, -1, String.to_char_list(name)))
-    size = event.entry.enclosure.size
+    size = case event.entry.enclosure.size do
+      s when s < 1 -> nil
+      s -> s
+    end
     gauge = :wxGauge.new(inpanel, -1, (if size, do: size, else: -1))
     updater = fn v -> :wxGauge.setValue(gauge, v) end
     if !size, do: updater = fn v -> :wxGauge.pulse(gauge) end
@@ -299,7 +302,9 @@ defmodule Feedistiller.GUI do
     {updater, bytes, _} = HashDict.fetch!(state.items.i, filename)
     updater.(written)
     label = "Bytes: #{written} (#{hrbytes(written)})"
-    if event.entry.enclosure.size, do: label = label <> " - #{percent(written, event.entry.enclosure.size)}%"
+    if event.entry.enclosure.size && event.entry.enclosure.size > 0 do
+      label = label <> " - #{percent(written, event.entry.enclosure.size)}%"
+    end
     if !is_nil(time), do: label = label <> " - Time: #{tformat(time)}"
     :wxStaticText.setLabel(bytes, String.to_char_list(label))
   end
