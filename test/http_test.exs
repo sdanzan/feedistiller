@@ -41,7 +41,7 @@ defmodule Feedistiller.Http.Test do
   test "stream_get!/6 with redirect" do
     with_mock HTTPoison, [get!: fn
         ("url", [], [stream_to: _, hackney: _]) ->
-          send(self(), %HTTPoison.AsyncChunk{chunk: {:redirect, "url2", []}})
+          send(self(), %HTTPoison.AsyncRedirect{to: "url2"})
         ("url2", [], [stream_to: _, hackney: _]) ->
           data = "DATA"
           send(self(), %HTTPoison.AsyncChunk{chunk: data})
@@ -60,7 +60,7 @@ defmodule Feedistiller.Http.Test do
   test "stream_get!/7 with too many redirect" do
     with_mock HTTPoison, [get!: fn
         ("url", [], [stream_to: _, hackney: _]) ->
-          send(self(), %HTTPoison.AsyncChunk{chunk: {:redirect, "url2", []}})
+          send(self(), %HTTPoison.AsyncRedirect{to: "url2"})
         ("url2", [], [stream_to: _, hackney: _]) ->
           data = "DATA"
           send(self(), %HTTPoison.AsyncChunk{chunk: data})
