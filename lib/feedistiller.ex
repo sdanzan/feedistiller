@@ -71,10 +71,9 @@ end
 
 defmodule Feedistiller.Util do
 
-  def tformat({m, s, mu})
-  when is_integer(m) and is_integer(s) and is_integer(mu)
+  def tformat(t = %Timex.Duration{})
   do
-    Timex.format({m, s, 0}, :humanized)
+    Timex.format(%Timex.Duration{t | microseconds: 0}, :humanized)
   end
   def tformat(_), do: ""
 
