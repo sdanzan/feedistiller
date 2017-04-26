@@ -73,7 +73,7 @@ defmodule Feedistiller.Util do
 
   def tformat(t = %Timex.Duration{})
   do
-    Timex.format(%Timex.Duration{t | microseconds: 0}, :humanized)
+    Timex.format_duration(%Timex.Duration{t | microseconds: 0}, :humanized)
   end
   def tformat(_), do: ""
 
