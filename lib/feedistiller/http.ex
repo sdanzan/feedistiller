@@ -62,13 +62,13 @@ defmodule Feedistiller.Http do
   @spec stream_get_loop!(fun, any, integer, integer, String.t, String.t) :: {:ok, any}
   defp stream_get_loop!(p, s, t, r, u, pw) do
     receive do
-      %HTTPoison.AsyncChunk{chunk: {:redirect, location, _headers}} ->
+      %HTTPoison.AsyncRedirect{to: location} ->
         stream_get!(location, p, s, t, r - 1, u, pw)
       %HTTPoison.AsyncChunk{chunk: chunk} -> 
         stream_get_loop!(p, p.(chunk, s), t, r, u, pw)
       %HTTPoison.AsyncEnd{} -> {:ok, s}
       %HTTPoison.AsyncHeaders{} -> stream_get_loop!(p, s, t, r, u, pw)
-      %HTTPoison.AsyncStatus{code: code} when code in [200, 301, 302, 307, 308] -> stream_get_loop!(p, s, t, r, u, pw)
+      %HTTPoison.AsyncStatus{code: 200} -> stream_get_loop!(p, s, t, r, u, pw)
     after
       # no response for a long time, just give up
       t * 1000 -> raise TimeoutError
