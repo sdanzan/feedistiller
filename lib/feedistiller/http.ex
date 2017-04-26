@@ -50,10 +50,12 @@ defmodule Feedistiller.Http do
   when is_integer(max_redirect) and max_redirect >= 0
   do
     hackney = [follow_redirect: true]
-    if user != "" or password != "" do
-      hackney = [basic_auth: {user, password}] ++ hackney
+    hackney = if user != "" or password != "" do
+      [basic_auth: {user, password}] ++ hackney
+    else
+      hackney
     end
-    HTTPoison.get!(url, [], [stream_to: self, hackney: hackney])
+    HTTPoison.get!(url, [], [stream_to: self(), hackney: hackney])
     stream_get_loop!(process_chunk, state, timeout, max_redirect, user, password)
   end
 

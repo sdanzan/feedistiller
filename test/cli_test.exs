@@ -30,9 +30,11 @@ defmodule Feedistiller.CLI.Test do
               ]
 
     for gui <- [false, true] do
-      if gui do
-        [p1, p2 | options] = options
-        options = [p1, p2, "--gui" | options]
+      options = if gui do
+        [p1, p2 | opts] = options
+        [p1, p2, "--gui" | opts]
+      else
+        options
       end
 
       {:feeds, [global: g, feeds: feeds], ^gui} = CLI.parse_argv(options)
@@ -74,8 +76,8 @@ defmodule Feedistiller.CLI.Test do
       assert f3.url == "url-3"
       assert f3.filters.name == [~r/bar/, ~r/foo/]
       assert f3.filters.limits.max == 15
-      assert f3.filters.limits.from == Timex.DateFormat.parse!("2015-12-12 12:12:12", @format)
-      assert f3.filters.limits.to == Timex.DateFormat.parse!("2015-12-13 13:13:13", @format)
+      assert f3.filters.limits.from == Timex.parse!("2015-12-12 12:12:12", @format)
+      assert f3.filters.limits.to == Timex.parse!("2015-12-13 13:13:13", @format)
       refute f3.only_new
       assert f3.timeout == 40
     end
@@ -107,16 +109,16 @@ defmodule Feedistiller.CLI.Test do
   test "main" do
     with_mock HTTPoison, [get!: fn
         ("feed_url", _, _) ->
-          {p1, p2} = String.split_at(get_feed_data, 1350)
-          send(self, %HTTPoison.AsyncChunk{chunk: p1})
-          send(self, %HTTPoison.AsyncChunk{chunk: p2})
-          send(self, %HTTPoison.AsyncEnd{})
+          {p1, p2} = String.split_at(get_feed_data(), 1350)
+          send(self(), %HTTPoison.AsyncChunk{chunk: p1})
+          send(self(), %HTTPoison.AsyncChunk{chunk: p2})
+          send(self(), %HTTPoison.AsyncEnd{})
         ("enclosure.txt", _, _) ->
-          send(self, %HTTPoison.AsyncChunk{chunk: get_txt_enclosure})
-          send(self, %HTTPoison.AsyncEnd{})
+          send(self(), %HTTPoison.AsyncChunk{chunk: get_txt_enclosure()})
+          send(self(), %HTTPoison.AsyncEnd{})
         ("enclosure.xml", _, _) ->
-          send(self, %HTTPoison.AsyncChunk{chunk: get_xml_enclosure})
-          send(self, %HTTPoison.AsyncEnd{})
+          send(self(), %HTTPoison.AsyncChunk{chunk: get_xml_enclosure()})
+          send(self(), %HTTPoison.AsyncEnd{})
       end] do
 
       args = ["--destination", "tmp", "--feed-url", "feed_url", "--name",  "test"]

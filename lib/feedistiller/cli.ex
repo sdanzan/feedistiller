@@ -17,7 +17,6 @@ defmodule Feedistiller.CLI do
   Command line interface for Feedistiller.
   """
 
-  use Timex
   import Feedistiller.Util
   alias Feedistiller.FeedAttributes
 
@@ -75,9 +74,9 @@ defmodule Feedistiller.CLI do
         {:feeds, feeds, gui} ->
           Feedistiller.Reporter.log_to_stdout
           if gui do
-            {:ok, _} = GenServer.start_link(Feedistiller.GUI, {self, Feedistiller.Reporter.stream})
+            {:ok, _} = GenServer.start_link(Feedistiller.GUI, {self(), Feedistiller.Reporter.stream})
           end
-          {timestamp, _} = Time.measure(fn ->
+          {timestamp, _} = Timex.Duration.measure(fn ->
             case feeds[:global].max_simultaneous_downloads do
               :unlimited ->
                 Feedistiller.download_feeds(feeds[:feeds])
@@ -116,10 +115,10 @@ defmodule Feedistiller.CLI do
   """
   @spec parse_argv([String.t]) :: {:feeds, [global: FeedAttributes.t, feeds: [FeedAttributes.t]]} | {:help, String.t}
   def parse_argv(argv) do
-    {parsed, [], []} = OptionParser.parse(argv, strict: switches, alias: aliases)
+    {parsed, [], []} = OptionParser.parse(argv, strict: switches(), alias: aliases())
 
     if check_help(parsed) do
-      help
+      help()
     else
       global_config = %FeedAttributes{max_simultaneous_downloads: :unlimited}
       {options, global_config} = parse_feed_attributes({parsed, global_config})
@@ -194,9 +193,9 @@ defmodule Feedistiller.CLI do
   end
 
   defp parse_date(date) do
-    case DateFormat.parse(date, "{ISOz}") do
+    case Timex.parse(date, "{ISOz}") do
       {:ok, date_time} -> date_time
-      _ -> case DateFormat.parse(date, "{YYYY}-{M}-{D} {h24}:{m}:{s}") do
+      _ -> case Timex.parse(date, "{YYYY}-{M}-{D} {h24}:{m}:{s}") do
         {:ok, date_time} -> date_time
       end
     end

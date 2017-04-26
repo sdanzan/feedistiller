@@ -23,7 +23,7 @@ defmodule Feedistiller.Feeder do
   alias Feedistiller.Feeder
 
   @type ws :: String.t | nil
-  @type wd :: Timex.DateTime.t | nil
+  @type wd :: DateTime.t | nil
   @type wl :: integer | nil
 
   defmodule Feed do
@@ -72,7 +72,7 @@ defmodule Feedistiller.Feeder do
   """
   @spec file(String.t) :: {:ok, Channel.t, String.t } | {term, term, term, term, Channel.t}
   def file(filename) do
-    file(filename, default_opts)
+    file(filename, default_opts())
   end
 
   @doc """
@@ -105,7 +105,7 @@ defmodule Feedistiller.Feeder do
   end
 
   def stream(<<data :: binary>>) do
-    stream(data, default_opts)
+    stream(data, default_opts())
   end
 
   @doc """
@@ -124,7 +124,7 @@ defmodule Feedistiller.Feeder do
     if opts[:event_fun] do
       Keyword.put(opts, :event_fun, fn e, acc -> opts[:event_fun].(event(e), acc) end)
     else
-      transform_opts(Keyword.merge(default_opts, opts))
+      transform_opts(Keyword.merge(default_opts(), opts))
     end
   end
 
@@ -148,7 +148,7 @@ defmodule Feedistiller.Feeder do
   @inline true
   defp wd(:undefined), do: nil
   defp wd(any) do
-    case Timex.DateFormat.parse(any, "{RFC1123}") do
+    case Timex.parse(any, "{RFC1123}") do
       {:error, _} -> nil
       {:ok, date} -> date
     end
@@ -167,13 +167,13 @@ defmodule Feedistiller.Feeder do
   @inline true
   defp event(:endFeed), do: :endFeed
 
-  defp event({:feed, {:feed, author, id, image, language, link, subtitle, summary, title, updated}}) do
+  defp event({:feed, {:feed, author, id, image, language, link, subtitle, summary, title, updated, _url}}) do
     %Feeder.Feed{author: ws(author), id: ws(id), image: ws(image), language: ws(language),
                  link: ws(link), subtitle: ws(subtitle), summary: ws(summary),
                  title: ws(title), updated: wd(updated)}
   end
 
-  defp event({:entry, {:entry, author, duration, encl, id, image, link, subtitle, summary, title, updated}}) do
+  defp event({:entry, {:entry, author, _category, duration, encl, id, image, link, subtitle, summary, title, updated}}) do
     %Feeder.Entry{author: ws(author), duration: ws(duration), enclosure: enclosure(encl), id: ws(id),
                   image: ws(image), link: ws(link), subtitle: ws(subtitle), summary: ws(summary),
                   title: ws(title), updated: wd(updated)}

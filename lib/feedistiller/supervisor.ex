@@ -20,7 +20,7 @@ defmodule Feedistiller.Supervisor do
   
   @doc "Let's start!"
   def start(_, _) do
-    start_link
+    start_link()
   end
   
   @doc "Let's start!"

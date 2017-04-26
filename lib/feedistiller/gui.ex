@@ -32,8 +32,8 @@ defmodule Feedistiller.GUI do
 
   defstruct wx: nil, frame: nil,
             data: %{current: 0, total: 0, total_bytes: 0, finished: 0, complete: false, time: nil},
-            feeds: %{page: nil, sizer: nil, f: HashDict.new()},
-            items: %{page: nil, sizer: nil, i: HashDict.new()}
+            feeds: %{page: nil, sizer: nil, f: Map.new()},
+            items: %{page1: nil, page2: nil, sizer1: nil, sizer2: nil, i: Map.new()}
 
   defp hrbytes(bytes) do
     case div(bytes, 1024*1024) do
@@ -61,50 +61,47 @@ defmodule Feedistiller.GUI do
 
   defp set_header_text(feed, info) do
     s = "#{feed.name}"
-    if info.channel do
-      s = s <> " (\"#{info.channel.title}\")"
-    end
+    s = if info.channel, do: s <> " (\"#{info.channel.title}\")", else: s
     s = s <> "\nDestination: #{Path.join(feed.destination, feed.name)}\nDownloaded: #{info.total}"
-    if info.complete do
-      s = s <> "\nDownloading: finished (time: #{tformat(info.time)})"
+    s = if info.complete do
+      s <> "\nDownloading: finished (time: #{tformat(info.time)})"
       :wxStaticText.setBackgroundColour(info.header, @green)
     else
-      s = s <> "\nDownloading: #{info.current}"
+      s <> "\nDownloading: #{info.current}"
     end
     s = s <> "\nBytes: #{info.bytes}"
-    if info.bytes >= 1024, do: s = s <> " (#{hrbytes(info.bytes)})#{}"
+    s = if info.bytes >= 1024, do: s <> " (#{hrbytes(info.bytes)})#{}", else: s
     :wxStaticText.setLabel(info.header, String.to_char_list(s))
   end
 
-  defp panel(t) do
+  defp panel(t, n) do
     p = :wxScrolledWindow.new(t)
     :wxScrolledWindow.setScrollRate(p, 5, 5)
     s = :wxBoxSizer.new(:wx_const.wx_vertical)
     :wxScrolledWindow.setSizer(p, s)
+    true = :wxNotebook.addPage(t, p, n)
     {p, s}
   end
 
   def init({parent, stream}) do
     w = :wx.new()
     f = :wxFrame.new(w, -1, 'Feedistiller - running', [size: {600, 371}])
-    pid = self
+    pid = self()
     :wxFrame.connect(f, :close_window, [callback: fn (_, _) -> GenServer.cast(pid, {:close, parent}) end]) 
     :wxFrame.createStatusBar(f)
     set_status_text(f, %{current: 0, total: 0, total_bytes: 0, finished: 0, complete: false, time: nil})
     t = :wxNotebook.new(f, -1)
 
-    {p1, s1} = panel(t)
-    true = :wxNotebook.addPage(t, p1, 'Feeds')
-
-    {p2, s2} = panel(t)
-    true = :wxNotebook.addPage(t, p2, 'Files')
+    {p1, s1} = panel(t, 'Feeds')
+    {p2, s2} = panel(t, 'Active downloads')
+    {p3, s3} = panel(t, 'Finished downloads')
 
     :wxFrame.show(f)
 
     spawn_link(fn -> listen(pid, stream) end)
     {:ok, %GUI{wx: w, frame: f,
-        feeds: %{page: p1, sizer: s1, f: HashDict.new()},
-        items: %{page: p2, sizer: s2, i: HashDict.new()}
+        feeds: %{page: p1, sizer: s1, f: Map.new()},
+        items: %{page1: p2, sizer1: s2, page2: p3, sizer2: s3, i: Map.new()}
       }
     }
   end
@@ -143,7 +140,7 @@ defmodule Feedistiller.GUI do
 
     {:noreply, %GUI{state |
         feeds: %{state.feeds |
-          f: HashDict.put(state.feeds.f, event.feed.name, info)
+          f: Map.put(state.feeds.f, event.feed.name, info)
         }
       }
     }
@@ -151,12 +148,12 @@ defmodule Feedistiller.GUI do
 
   # Got a complete channel
   def handle_cast(event = %Event{event: {:channel_complete, channel}}, state = %GUI{}) do
-    info = %{HashDict.fetch!(state.feeds.f, event.feed.name) | channel: channel}
+    info = %{Map.fetch!(state.feeds.f, event.feed.name) | channel: channel}
     set_header_text(event.feed, info)
     :wxWindow.fitInside(state.feeds.page)
     {:noreply, %GUI{ state |
         feeds: %{ state.feeds |
-          f: HashDict.put(state.feeds.f, event.feed.name, info)
+          f: Map.put(state.feeds.f, event.feed.name, info)
         }
       }
     }
@@ -166,12 +163,12 @@ defmodule Feedistiller.GUI do
   def handle_cast(event = %Event{event: {:end_enclosures, time}}, state = %GUI{}) do
     state = %GUI{state | data: %{state.data | finished: state.data.finished + 1}}
     set_status_text(state.frame, state.data)
-    info = %{HashDict.fetch!(state.feeds.f, event.feed.name) | complete: true, time: time}
+    info = %{Map.fetch!(state.feeds.f, event.feed.name) | complete: true, time: time}
     set_header_text(event.feed, info)
     :wxWindow.fitInside(state.feeds.page)
     {:noreply, %GUI{ state |
         feeds: %{ state.feeds |
-          f: HashDict.put(state.feeds.f, event.feed.name, info)
+          f: Map.put(state.feeds.f, event.feed.name, info)
         }
       }
     }
@@ -180,12 +177,12 @@ defmodule Feedistiller.GUI do
   # Begin downloading an enclosure
   def handle_cast(event = %Event{event: {:begin, filename}}, state = %GUI{}) do
     # Update global feedback
-    info = HashDict.fetch!(state.feeds.f, event.feed.name)
+    info = Map.fetch!(state.feeds.f, event.feed.name)
     info = %{info | current: info.current + 1}
     set_header_text(event.feed, info)
 
     # Add gauge for the new file
-    inpanel = :wxPanel.new(state.items.page)
+    inpanel = :wxPanel.new(state.items.page1)
     insizer = :wxBoxSizer.new(:wx_const.wx_vertical)
     :wxPanel.setSizer(inpanel, insizer)
     name = event.feed.name <> " - " <> dformat(event.entry.updated) <> ": " <> event.entry.title
@@ -201,21 +198,19 @@ defmodule Feedistiller.GUI do
     bytes = :wxStaticText.new(inpanel, -1, 'Bytes: 0')
     :wxBoxSizer.add(insizer, bytes)
     flags = flags |> :wxSizerFlags.border
-    if Enum.count(state.items.i) > 0 do
-      :wxBoxSizer.add(state.items.sizer, :wxStaticLine.new(state.items.page), flags)
-    end
-    :wxBoxSizer.add(state.items.sizer, inpanel, flags)
+    :wxBoxSizer.add(state.items.sizer1, inpanel, flags)
+    :wxBoxSizer.add(state.items.sizer1, :wxStaticLine.new(state.items.page1), flags)
     :wxSizerFlags.destroy(flags)
 
     # Refresh view
-    :wxWindow.fitInside(state.items.page)
-    h = :wxWindow.getScrollRange(state.items.page, :wx_const.wx_vertical)
-    :wxScrolledWindow.scroll(state.items.page, 0, h)
+    :wxWindow.fitInside(state.items.page1)
+    h = :wxWindow.getScrollRange(state.items.page1, :wx_const.wx_vertical)
+    :wxScrolledWindow.scroll(state.items.page1, 0, h)
     
     state = %GUI{state |
         data: %{state.data | current: state.data.current + 1},
-        feeds: %{state.feeds | f: HashDict.put(state.feeds.f, event.feed.name, info)},
-        items: %{state.items | i: HashDict.put(state.items.i, filename, {gauge, bytes, inpanel})}
+        feeds: %{state.feeds | f: Map.put(state.feeds.f, event.feed.name, info)},
+        items: %{state.items | i: Map.put(state.items.i, filename, {gauge, bytes, inpanel})}
       }
     set_status_text(state.frame, state.data)
     {:noreply, state}
@@ -229,29 +224,32 @@ defmodule Feedistiller.GUI do
 
   # Finished downloading an enclosure
   def handle_cast(event = %Event{event: {:finish_write, filename, written, time}}, state = %GUI{}) do
-    if !event.entry.enclosure.size || event.entry.enclosure.size <= 0 do
-      event = %Event{event | 
+    event = if !event.entry.enclosure.size || event.entry.enclosure.size <= 0 do
+      %Event{event | 
         entry: %Feeder.Entry{event.entry | 
           enclosure: %Feeder.Enclosure{event.entry.enclosure | size: written}
         }
       }
+    else
+      event
     end
     handle_write(event, filename, written, time, state)
+
     state = %GUI{state | 
       data: %{state.data | 
         current: state.data.current - 1, total: state.data.total + 1, total_bytes: state.data.total_bytes + written
       }
     }
     set_status_text(state.frame, state.data)
-    info = HashDict.fetch!(state.feeds.f, event.feed.name)
+    info = Map.fetch!(state.feeds.f, event.feed.name)
     info = %{info | current: info.current - 1, total: info.total + 1, bytes: info.bytes + written}
     set_header_text(event.feed, info)
-    {_, _, gaugepanel} = HashDict.fetch!(state.items.i, filename)
+    {_, _, gaugepanel} = Map.fetch!(state.items.i, filename)
     :wxPanel.setBackgroundColour(gaugepanel, @green)
     :wxPanel.refresh(gaugepanel)
     {:noreply, %GUI{state |
         feeds: %{state.feeds |
-          f: HashDict.put(state.feeds.f, event.feed.name, info)
+          f: Map.put(state.feeds.f, event.feed.name, info)
         }
       }
     }
@@ -265,15 +263,15 @@ defmodule Feedistiller.GUI do
       }
     }
     set_status_text(state.frame, state.data)
-    info = HashDict.fetch!(state.feeds.f, event.feed.name)
+    info = Map.fetch!(state.feeds.f, event.feed.name)
     info = %{info | current: info.current - 1}
     set_header_text(event.feed, info)
-    {_, _, gaugepanel} = HashDict.fetch!(state.items.i, filename)
+    {_, _, gaugepanel} = Map.fetch!(state.items.i, filename)
     :wxPanel.setBackgroundColour(gaugepanel, @red)
     :wxPanel.refresh(gaugepanel)
     {:noreply, %GUI{state |
         feeds: %{state.feeds |
-          f: HashDict.put(state.feeds.f, event.feed.name, info)
+          f: Map.put(state.feeds.f, event.feed.name, info)
         }
       }
     }
@@ -307,24 +305,26 @@ defmodule Feedistiller.GUI do
   end
 
   defp handle_write(event, filename, written, time, state) do
-    {gauge, bytes, _} = HashDict.fetch!(state.items.i, filename)
+    {gauge, bytes, _} = Map.fetch!(state.items.i, filename)
     label = "Bytes: #{written} (#{hrbytes(written)})"
-    if event.entry.enclosure.size && event.entry.enclosure.size > 0 do
-      label = label <> " - #{percent(written, event.entry.enclosure.size)}%"
+    label = if event.entry.enclosure.size && event.entry.enclosure.size > 0 do
       :wxGauge.setValue(gauge, written)
+      label <> " - #{percent(written, event.entry.enclosure.size)}%"
+    else
+      label
     end
-    if !is_nil(time), do: label = label <> " - Time: #{tformat(time)}"
+    label = if !is_nil(time), do: label <> " - Time: #{tformat(time)}", else: label
     :wxStaticText.setLabel(bytes, String.to_char_list(label))
   end
 
   defp handle_bad_feed(event, state) do
-    info = %{HashDict.fetch!(state.feeds.f, event.feed.name) | complete: true}
+    info = %{Map.fetch!(state.feeds.f, event.feed.name) | complete: true}
     set_header_text(event.feed, info)
     :wxStaticText.setBackgroundColour(info.header, (if info.total > 0, do: @yellow, else: @red))
     :wxStaticText.refresh(info.header)
     {:noreply, %GUI{state |
         feeds: %{state.feeds |
-          f: HashDict.put(state.feeds.f, event.feed.name, info)
+          f: Map.put(state.feeds.f, event.feed.name, info)
         }
       }
     }

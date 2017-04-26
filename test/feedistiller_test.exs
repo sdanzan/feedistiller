@@ -28,16 +28,16 @@ defmodule Feedistiller.Test do
     quote do
       with_mock HTTPoison, [get!: fn
           ("feed_url", _, _) ->
-            {p1, p2} = String.split_at(get_feed_data, 1350)
-            send(self, %HTTPoison.AsyncChunk{chunk: p1})
-            send(self, %HTTPoison.AsyncChunk{chunk: p2})
-            send(self, %HTTPoison.AsyncEnd{})
+            {p1, p2} = String.split_at(get_feed_data(), 1350)
+            send(self(), %HTTPoison.AsyncChunk{chunk: p1})
+            send(self(), %HTTPoison.AsyncChunk{chunk: p2})
+            send(self(), %HTTPoison.AsyncEnd{})
           ("enclosure.txt", _, _) ->
-            send(self, %HTTPoison.AsyncChunk{chunk: get_txt_enclosure})
-            send(self, %HTTPoison.AsyncEnd{})
+            send(self(), %HTTPoison.AsyncChunk{chunk: get_txt_enclosure()})
+            send(self(), %HTTPoison.AsyncEnd{})
           ("enclosure.xml", _, _) ->
-            send(self, %HTTPoison.AsyncChunk{chunk: get_xml_enclosure})
-            send(self, %HTTPoison.AsyncEnd{})
+            send(self(), %HTTPoison.AsyncChunk{chunk: get_xml_enclosure()})
+            send(self(), %HTTPoison.AsyncEnd{})
         end] do
         unquote(block)
       end
@@ -104,8 +104,8 @@ defmodule Feedistiller.Test do
         filters: %Filters{
           limits: %Limits{
             max: 2,
-            from: Timex.DateFormat.parse!("Wed, 14 Oct 2015 17:42:42 GMT", "{RFC1123}"),
-            to: Timex.DateFormat.parse!("Wed, 16 Oct 2015 17:42:42 GMT", "{RFC1123}")
+            from: Timex.parse!("Wed, 14 Oct 2015 17:42:42 GMT", "{RFC1123}"),
+            to: Timex.parse!("Wed, 16 Oct 2015 17:42:42 GMT", "{RFC1123}")
           }
         }
       }

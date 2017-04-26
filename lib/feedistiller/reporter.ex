@@ -44,9 +44,10 @@ defmodule Feedistiller.Reporter do
                   total_bytes: state.total_bytes + written
                 }
                 if written != entry.enclosure.size do
-                  state = %{state | errors: state.errors + 1}
+                  %{state | errors: state.errors + 1}
+                else
+                  state
                 end
-                state
               end)
             {:error_write, _filename, _exception} ->
               Agent.cast(Reported, fn state -> 
@@ -68,7 +69,7 @@ defmodule Feedistiller.Reporter do
   @doc "Stream events to standard output."
   @spec sync_log_to_stdout() :: :ok
   def sync_log_to_stdout do
-    for event <- stream, do: log(event, &IO.puts/1, &IO.puts/1)
+    for event <- stream(), do: log(event, &IO.puts/1, &IO.puts/1)
   end
 
   @doc "Starts a task streaming events to standard output."
@@ -80,7 +81,7 @@ defmodule Feedistiller.Reporter do
   @doc "Stream events to Logger"
   @spec sync_log_to_logger() :: :ok
   def sync_log_to_logger do
-    for event <- stream, do: log(event, fn s -> Logger.info(s) end, fn s -> Logger.error(s) end)
+    for event <- stream(), do: log(event, fn s -> Logger.info(s) end, fn s -> Logger.error(s) end)
   end
 
   @doc "Starts a task streaming events to Logger."

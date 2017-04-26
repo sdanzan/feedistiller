@@ -16,10 +16,10 @@ defmodule Feedistiller.Feeder.Test do
       title: "The Feed",
       subtitle: "The feed's subtitle",
       summary: "The feed's description",
-      updated: %Timex.DateTime{
+      updated: %DateTime{
         day: 17, month: 10, year: 2015,
         hour: 17, minute: 42, second: 42,
-        timezone: %Timex.TimezoneInfo{}
+        time_zone: "GMT", zone_abbr: "GMT", utc_offset: 0, std_offset: 0
       }
     }
   end
@@ -33,16 +33,16 @@ defmodule Feedistiller.Feeder.Test do
       summary: "Item #{i}",
       link: "http://this.is.dummy/item/#{i}",
       duration: "180",
-      updated: %Timex.DateTime{
+      updated: %DateTime{
         day: 18 - i, month: 10, year: 2015,
         hour: 17, minute: 42, second: 42,
-        timezone: %Timex.TimezoneInfo{}
+        time_zone: "GMT", zone_abbr: "GMT", utc_offset: 0, std_offset: 0
       }
     }
   end
 
   defp check_channel(channel) do
-    assert channel.feed == feed
+    assert channel.feed == feed()
     assert channel.entries |> Enum.count == 5
     channel.entries
     |> Enum.reduce(1, fn e, i -> 
@@ -54,17 +54,17 @@ defmodule Feedistiller.Feeder.Test do
   end
 
   test "parse file" do
-    {:ok, channel = %Feeder.Channel{}, ""} = Feeder.file(feed_file)
+    {:ok, channel = %Feeder.Channel{}, ""} = Feeder.file(feed_file())
     check_channel(channel)
   end
 
   test "parse data" do
-    {:ok, channel = %Feeder.Channel{}, ""} = Feeder.stream(File.read!(feed_file))
+    {:ok, channel = %Feeder.Channel{}, "\n"} = Feeder.stream(File.read!(feed_file()))
     check_channel(channel)
   end
 
   test "parse data partial" do
-    data = File.read!(feed_file)
+    data = File.read!(feed_file())
     data = String.split_at(data, div(String.length(data), 2))
 
     opts = [
@@ -75,7 +75,7 @@ defmodule Feedistiller.Feeder.Test do
       continuation_state: Tuple.to_list(data)
     ]
 
-    {:ok, channel = %Feeder.Channel{}, ""} = Feeder.stream(opts)
+    {:ok, channel = %Feeder.Channel{}, "\n"} = Feeder.stream(opts)
     check_channel(channel)
   end
 end

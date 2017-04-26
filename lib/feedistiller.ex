@@ -70,16 +70,15 @@ defmodule Feedistiller.Event do
 end
 
 defmodule Feedistiller.Util do
-  use Timex
 
   def tformat({m, s, mu})
   when is_integer(m) and is_integer(s) and is_integer(mu)
   do
-    TimeFormat.format({m, s, 0}, :humanized)
+    Timex.format({m, s, 0}, :humanized)
   end
   def tformat(_), do: ""
 
-  def dformat(date = %DateTime{}), do: DateFormat.format!(date, "%Y-%m-%d", :strftime)
+  def dformat(date = %DateTime{}), do: Timex.format!(date, "%Y-%m-%d", :strftime)
   def dformat(nil), do: "????-??-??"
 end
 
@@ -98,7 +97,6 @@ defmodule Feedistiller do
   `HTTPoison` must be started to use `Feedistiller` functions.
   """
   
-  use Timex
   alias Feedistiller.FeedAttributes
   alias Feedistiller.Event
   alias Feedistiller.Http
@@ -202,7 +200,7 @@ defmodule Feedistiller do
   end
 
   defp generate_chunks_stream(chunks, feed, semaphores) do
-    {t, _} = Time.measure(fn ->
+    {t, _} = Timex.Duration.measure(fn ->
       try do
         acquire(semaphores)
         GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: :begin_feed})
@@ -269,9 +267,9 @@ defmodule Feedistiller do
   defp filter_feed_entry(entry, dates) do
     case dates do
       {:oldest, :latest} -> true
-      {:oldest, to} -> Timex.Date.compare(entry.updated, to) <= 0
-      {from, :latest} -> Timex.Date.compare(entry.updated, from) >= 0
-      {from, to} -> Timex.Date.compare(entry.updated, to) <= 0 and Timex.Date.compare(entry.updated, from) >= 0
+      {:oldest, to} -> Timex.compare(entry.updated, to) <= 0
+      {from, :latest} -> Timex.compare(entry.updated, from) >= 0
+      {from, to} -> Timex.compare(entry.updated, to) <= 0 and Timex.compare(entry.updated, from) >= 0
     end
   end
 
@@ -323,15 +321,17 @@ defmodule Feedistiller do
     case File.open(tmp_filename, [:write]) do
       {:ok, file} ->
         try do
-          {time, {:ok, {written, _}}} = Time.measure(fn -> Http.stream_get!(
+          {time, {:ok, {written, _}}} = Timex.Duration.measure(fn -> Http.stream_get!(
             entry.enclosure.url,
             fn chunk, {current_size, current_chunk} ->
               :ok = IO.binwrite(file, chunk)
               s = current_size + byte_size(chunk)
               c = current_chunk + byte_size(chunk)
-              if c > @chunk_limit do
+              c = if c > @chunk_limit do
                 GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:write, filename, s}})
-                c = 0
+                0
+              else
+                c
               end
               {s, c}
             end,
@@ -352,7 +352,7 @@ defmodule Feedistiller do
 
   # Retrieve all enclosures
   defp get_enclosures(entries, destination, feed, semaphores) do
-    {t, _} = Time.measure(fn ->
+    {t, _} = Timex.Duration.measure(fn ->
       countdown = CountDown.create_link(0)
       # fetch all enclosures, up to 'max' at the same time
       for entry <- entries do

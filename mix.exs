@@ -5,23 +5,23 @@ defmodule Feedistiller.Mixfile do
 
   def project do
     [app: :feedistiller,
-     version: "2.0.2",
+     version: "3.0.0",
      description: @description,
-     package: package,
-     elixir: "~> 1.1",
-     escript: escript_config,
+     package: package(),
+     elixir: "~> 1.4",
+     escript: escript_config(),
      test_coverage: [tool: ExCoveralls],
      preferred_cli_env: [coveralls: :test],
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
-     deps: deps]
+     deps: deps()]
   end
 
   # Configuration for the OTP application
   #
   # Type "mix help compile.app" for more information
   def application do
-    [applications: [:logger, :tzdata, :httpoison],
+    [applications: [:crypto, :logger, :tzdata, :httpoison],
      mod: {Feedistiller.Supervisor, []}]
   end
 
@@ -37,15 +37,15 @@ defmodule Feedistiller.Mixfile do
   defp deps do
     [
       {:alambic, "~> 0.1.0"},
-      {:httpoison, "~> 0.7.2"},
-      {:feeder, "~> 2.0.0"},
-      {:timex, "~> 0.19.5"},
+      {:httpoison, "~> 0.11.2"},
+      {:feeder, "~> 2.2.1"},
+      {:timex, "~> 3.0"},
       # Uncomment following line if you want to build the escript
       # {:tzdata, "== 0.1.8", override: true},
-      {:earmark, "~> 0.1.17", only: :docs},
-      {:ex_doc, "~> 0.10.0", only: :docs},
-      {:mock, "~> 0.1.1", only: :test},
-      {:excoveralls, "~> 0.4.0", only: :test}
+      {:earmark, "~> 1.2.0", only: :docs},
+      {:ex_doc, "~> 0.14", only: :docs},
+      {:mock, "~> 0.2.0", only: :test},
+      {:excoveralls, "~> 0.6.3", only: :test}
     ]
   end
 
