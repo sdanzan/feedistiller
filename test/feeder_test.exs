@@ -54,13 +54,15 @@ defmodule Feedistiller.Feeder.Test do
   end
 
   test "parse file" do
-    {:ok, channel = %Feeder.Channel{}, ""} = Feeder.file(feed_file())
+    {:ok, channel = %Feeder.Channel{}, tail} = Feeder.file(feed_file())
     check_channel(channel)
+    assert String.strip(tail) == ""
   end
 
   test "parse data" do
-    {:ok, channel = %Feeder.Channel{}, "\n"} = Feeder.stream(File.read!(feed_file()))
+    {:ok, channel = %Feeder.Channel{}, tail} = Feeder.stream(File.read!(feed_file()))
     check_channel(channel)
+    assert String.strip(tail) == ""
   end
 
   test "parse data partial" do
@@ -75,7 +77,8 @@ defmodule Feedistiller.Feeder.Test do
       continuation_state: Tuple.to_list(data)
     ]
 
-    {:ok, channel = %Feeder.Channel{}, "\n"} = Feeder.stream(opts)
+    {:ok, channel = %Feeder.Channel{}, tail} = Feeder.stream(opts)
     check_channel(channel)
+    assert String.strip(tail) == ""
   end
 end
