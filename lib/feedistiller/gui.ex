@@ -64,8 +64,8 @@ defmodule Feedistiller.GUI do
     s = if info.channel, do: s <> " (\"#{info.channel.title}\")", else: s
     s = s <> "\nDestination: #{Path.join(feed.destination, feed.name)}\nDownloaded: #{info.total}"
     s = if info.complete do
-      s <> "\nDownloading: finished (time: #{tformat(info.time)})"
       :wxStaticText.setBackgroundColour(info.header, @green)
+      s <> "\nDownloading: finished (time: #{tformat(info.time)})"
     else
       s <> "\nDownloading: #{info.current}"
     end
