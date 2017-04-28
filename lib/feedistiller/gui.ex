@@ -245,6 +245,7 @@ defmodule Feedistiller.GUI do
     info = %{info | current: info.current - 1, total: info.total + 1, bytes: info.bytes + written}
     set_header_text(event.feed, info)
     {_, _, gaugepanel} = Map.fetch!(state.items.i, filename)
+    move_to_completed_panel(state.items, gaugepanel)
     :wxPanel.setBackgroundColour(gaugepanel, @green)
     :wxPanel.refresh(gaugepanel)
     {:noreply, %GUI{state |
@@ -267,6 +268,7 @@ defmodule Feedistiller.GUI do
     info = %{info | current: info.current - 1}
     set_header_text(event.feed, info)
     {_, _, gaugepanel} = Map.fetch!(state.items.i, filename)
+    move_to_completed_panel(state.items, gaugepanel)
     :wxPanel.setBackgroundColour(gaugepanel, @red)
     :wxPanel.refresh(gaugepanel)
     {:noreply, %GUI{state |
@@ -328,5 +330,21 @@ defmodule Feedistiller.GUI do
         }
       }
     }
+  end
+  
+  defp move_to_completed_panel(panels, gauge) do
+    id = :wxWindow.getId(gauge)
+    idx = Enum.find_index(:wxSizer.getChildren(panels.sizer1), fn si -> id == :wxWindow.getId(:wxSizerItem.getWindow(si)) end)
+    :wxSizer.remove(idx + 1)
+    :wxSizer.remove(idx)
+    :wxWindow.reparent(gauge.panels.page2)
+    
+    flags = :wxSizerFlags.new |> :wxSizerFlags.expand |> :wxSizerFlags.border
+    :wxBoxSizer.add(panels.sizer2, gauge, flags)
+    :wxBoxSizer.add(panels.sizer2, :wxStaticLine.new(panels.page2), flags)
+    :wxSizerFlags.destroy(flags)
+    
+    :wxWindow.fitInside(panels.page1)
+    :wxWindow.fitInside(panels.page2)
   end
 end
