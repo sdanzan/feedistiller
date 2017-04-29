@@ -26,7 +26,7 @@ defmodule Feedistiller.CLI.Test do
     options = [ "--max-download", "14", "--destination", "destination", "--max", "15", "--name", "ALL", "--timeout", "40",
                 "--feed-url", "url-1", "--max", "3", "--max-download", "2", "--user", "Bilbo", "--password", "SauronSux", "--name", "Le super podcast",
                 "--feed-url", "url-2", "--destination", "destination-2", "--filter-content-type", "^audio", "--max", "unlimited", "--only-new",
-                "--feed-url", "url-3", "--filter-name", "foo", "--min-date", "2015-12-12 12:12:12", "--filter-name", "bar", "--max-date", "2015-12-13 13:13:13",
+                "--feed-url", "url-3", "--filter-name", "foo", "--min-date", "2015-12-12 12:12:12", "--filter-name", "bar", "--max-date", "2015-12-13 13:13:13", "--clean"
               ]
 
     for gui <- [false, true] do
@@ -46,6 +46,7 @@ defmodule Feedistiller.CLI.Test do
       assert g.password == ""
       assert g.name == "ALL"
       refute g.only_new
+      refute g.clean
       assert g.timeout == 40
       
       [f1, f2, f3] = feeds
@@ -62,6 +63,7 @@ defmodule Feedistiller.CLI.Test do
       assert f1.password == "SauronSux"
       assert f1.name == "Le super podcast"
       refute f1.only_new
+      refute f1.clean
       assert f1.timeout == 40
 
       assert f2.url == "url-2"
@@ -71,6 +73,7 @@ defmodule Feedistiller.CLI.Test do
       assert f2.filters.mime == [~r/^audio/]
       assert f2.name == "ALL"
       assert f2.only_new
+      refute f2.clean
       assert f2.timeout == 40
 
       assert f3.url == "url-3"
@@ -79,6 +82,7 @@ defmodule Feedistiller.CLI.Test do
       assert f3.filters.limits.from == Timex.parse!("2015-12-12 12:12:12", @format)
       assert f3.filters.limits.to == Timex.parse!("2015-12-13 13:13:13", @format)
       refute f3.only_new
+      assert f3.clean
       assert f3.timeout == 40
     end
   end
@@ -96,7 +100,7 @@ defmodule Feedistiller.CLI.Test do
   end
 
   defp reset_reported do
-    Agent.update(Reported, fn _ -> %{errors: 0, download: 0, total_bytes: 0, download_successful: 0} end)
+    Agent.update(Reported, fn _ -> %{errors: 0, download: 0, total_bytes: 0, download_successful: 0, deleted: 0} end)
   end
 
   setup do
@@ -123,6 +127,7 @@ defmodule Feedistiller.CLI.Test do
 
       args = ["--destination", "tmp", "--feed-url", "feed_url", "--name",  "test"]
       output = ExUnit.CaptureIO.capture_io(fn -> CLI.main(args) end)
+
       assert Regex.match?(~r/Starting download for `Item 1`/, output)
       assert Regex.match?(~r/Starting download for `Item 2`/, output)
       assert Regex.match?(~r/Starting download for `Item 3`/, output)
@@ -134,5 +139,30 @@ defmodule Feedistiller.CLI.Test do
       assert Regex.match?(~r/Download finished for `Item 4`/, output)
       assert Regex.match?(~r/Download finished for `Item 5`/, output)
     end
+  end
+
+  test "clean" do
+    File.mkdir_p!("tmp/test")
+    f1 = Path.join("tmp/test", "_yolo_")
+    f2 = Path.join("tmp/test", "\"yolo\"")
+    f3 = Path.join("tmp/test", "yolo.tmp")
+    File.touch!(f1)
+    File.touch!(f2)
+    File.touch!(f3)
+
+    assert File.exists?(f1)
+    assert File.exists?(f2)
+    assert File.exists?(f3)
+    
+    args = ["--destination", "tmp", "--feed-url", "feed_url", "--name",  "test", "--clean"]
+    output = ExUnit.CaptureIO.capture_io(fn -> CLI.main(args) end)
+
+    assert Regex.match?(~r/Starting cleaning for test/, output)
+    assert Regex.match?(~r/Deleting file '.*tmp\/test\/"yolo"'/, output)
+    assert Regex.match?(~r/Deleting file '.*tmp\/test\/yolo.tmp'/, output)
+    assert Regex.match?(~r/Ending cleaning for test/, output)
+    assert File.exists?(f1)
+    refute File.exists?(f2)
+    refute File.exists?(f3)
   end
 end

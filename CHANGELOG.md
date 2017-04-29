@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.0.0
+
+* Better file name normalization
+* Use separated tabs in GUI for in progress and completed enclosures
+* 'Clean' mode where duplicated and tmp files are deleted
+* Upgrade to Elixir 1.4+
+
 ## 2.0.2
 
 * Bug fixes

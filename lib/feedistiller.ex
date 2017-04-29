@@ -54,10 +54,10 @@ defmodule Feedistiller.FeedAttributes do
 
   defstruct name: "", url: "", filters: %Feedistiller.Filters{},
             destination: ".", max_simultaneous_downloads: 3, user: "", password: "",
-            only_new: false, timeout: 60
+            only_new: false, timeout: 60, clean: false
   @type t :: %__MODULE__{name: String.t, url: String.t, filters: Filters.t, destination: String.t,
                          max_simultaneous_downloads: :unlimited | integer, user: String.t, password: String.t,
-                         only_new: boolean, timeout: integer}
+                         only_new: boolean, timeout: integer, clean: boolean}
 end
 
 defmodule Feedistiller.Event do
@@ -171,31 +171,64 @@ defmodule Feedistiller do
         raise e
     end
 
-    chunksq = BlockingQueue.create(10)
-    entriesq = BlockingQueue.create()
-    entries = entriesq
-    semaphores = [global_sem: global_sem, local_sem: get_sem(feed.max_simultaneous_downloads)]
+    if feed.clean do
+      clean(destination, feed, global_sem)
+    else
+      chunksq = BlockingQueue.create(10)
+      entriesq = BlockingQueue.create()
+      entries = entriesq
+      semaphores = [global_sem: global_sem, local_sem: get_sem(feed.max_simultaneous_downloads)]
 
-    # Download feed and gather chunks in a shared queue
-    spawn(fn -> generate_chunks_stream(chunksq, feed, semaphores) end)
+      # Download feed and gather chunks in a shared queue
+      spawn(fn -> generate_chunks_stream(chunksq, feed, semaphores) end)
 
-    # Filters
-    titlematch = for regex <- feed.filters.name, do: &Regex.match?(regex, &1.title)
-    typematch = for regex <- feed.filters.mime, do: &Regex.match?(regex, &1.enclosure.type)
-    filters = typematch ++ titlematch
-    filters = [fn e -> !(feed.only_new and File.exists?(filename(e, destination))) end | filters]
-    filters = [(&filter_feed_entry(&1, {feed.filters.limits.from, feed.filters.limits.to})) | filters]
-    filters = [fn e -> !is_nil(e.enclosure) end | filters]
+      # Filters
+      titlematch = for regex <- feed.filters.name, do: &Regex.match?(regex, &1.title)
+      typematch = for regex <- feed.filters.mime, do: &Regex.match?(regex, &1.enclosure.type)
+      filters = typematch ++ titlematch
+      filters = [fn e -> !(feed.only_new and File.exists?(filename(e, destination))) end | filters]
+      filters = [(&filter_feed_entry(&1, {feed.filters.limits.from, feed.filters.limits.to})) | filters]
+      filters = [fn e -> !is_nil(e.enclosure) end | filters]
 
-    # Parse the feed and filter/stream it to the entry queue
-    spawn(fn -> generate_entries_stream(entriesq, chunksq, feed, filters) end)
-    
-    # and get all!
-    get_enclosures(entries, destination, feed, semaphores)
+      # Parse the feed and filter/stream it to the entry queue
+      spawn(fn -> generate_entries_stream(entriesq, chunksq, feed, filters) end)
+      
+      # and get all!
+      get_enclosures(entries, destination, feed, semaphores)
 
-    # clean up
-    BlockingQueue.destroy(chunksq)
-    BlockingQueue.destroy(entriesq)
+      # clean up
+      BlockingQueue.destroy(chunksq)
+      BlockingQueue.destroy(entriesq)
+    end
+  end
+
+  defp remove_file(file, feed) do
+    File.rm!(file)
+    GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: {:clean, file}})
+  end
+
+  defp check_file(file, feed) do
+    try do
+      if Path.extname(file) == ".tmp" do
+        remove_file(file, feed)
+      else
+        cfile = filename(Path.basename(file), Path.dirname(file))
+        if cfile != file && File.exists?(cfile) do
+          remove_file(file, feed)
+        end
+      end
+    rescue
+      _ -> GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: {:bad_clean, file}})
+    end
+  end
+
+  defp clean(destination, feed, sem) do
+    acquire(sem)
+    GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: :begin_clean})
+    Path.wildcard(destination <> "/*") |> Enum.each(&check_file(&1, feed))
+    GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: :end_clean})
+  after
+    release(sem)
   end
 
   defp generate_chunks_stream(chunks, feed, semaphores) do
@@ -289,16 +322,29 @@ defmodule Feedistiller do
     sem_acquire(lsem)
   end
 
+  defp acquire(sem) do
+    sem_acquire(sem)
+  end
+
   defp release([global_sem: gsem, local_sem: lsem]) do
     sem_release(lsem)
     sem_release(gsem)
   end
 
+  defp release(sem) do
+    sem_release(sem)
+  end
+
+  defp filename(entry = %Feeder.Entry{}, destination) do
+    filename(entry.title, destination) <> Path.extname(entry.enclosure.url)
+  end
+
   defp filename(entry, destination) do
-    title = String.replace(entry.title, ~r/\*|<|>|\/|\\|\||"/, "_")
-    title = String.replace(title, "&", "")
+    title = String.replace(entry, ~r/\*|<|>|\/|\\|\||"/, "_")
+    title = String.replace(title, "&", "-")
     title = String.replace(title, "?", "")
-    Path.join(destination, title <> Path.extname(entry.enclosure.url))
+    title = String.trim(title)
+    Path.join(destination, title)
   end
 
   # Download one enclosure

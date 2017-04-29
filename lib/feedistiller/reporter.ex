@@ -55,6 +55,8 @@ defmodule Feedistiller.Reporter do
                   errors: state.errors + 1
                 }
               end)
+            {:clean, _} ->
+              Agent.cast(Reported, fn state -> %{state | deleted: state.deleted + 1} end)
             bad when bad in [:error_destination, :bad_url, :bad_feed] ->
               Agent.cast(Reported, fn state -> %{state | errors: state.errors + 1} end)
             _ -> nil
@@ -117,6 +119,10 @@ defmodule Feedistiller.Reporter do
       {:error_destination, destination} -> log_error.("Destination unavailable: `#{destination}`")
       :bad_url -> log_error.("Feed unavailable at #{feed.url}")
       :bad_feed -> log_error.("Incomplete feed at #{feed.url}")
+      :begin_clean -> log_info.("Starting cleaning for #{feed.name}")
+      :end_clean -> log_info.("Ending cleaning for #{feed.name}")
+      {:clean, file} -> log_info.("Deleting file '#{file}'")
+      {:bad_clean, file} -> log_info.("Error deleting file '#{file}'")
       _ -> nil
     end
   end

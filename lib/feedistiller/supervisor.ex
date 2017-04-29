@@ -34,7 +34,7 @@ defmodule Feedistiller.Supervisor do
   def init(:ok) do
     children = [
       worker(GenEvent, [[name: @reporter_name]]),
-      worker(Agent, [fn -> %{errors: 0, download: 0, total_bytes: 0, download_successful: 0} end, [name: @reported_name]]),
+      worker(Agent, [fn -> %{errors: 0, download: 0, total_bytes: 0, download_successful: 0, deleted: 0} end, [name: @reported_name]]),
       worker(Feedistiller.Reporter.StreamToReported, [])
     ]
     

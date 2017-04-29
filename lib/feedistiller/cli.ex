@@ -60,6 +60,8 @@ defmodule Feedistiller.CLI do
                        the required destination.
   --timeout          : timeout in seconds for the http operations. Default to 60s.
   --gui              : show the graphic interface.
+  --clean            : do not download anything, try to remove duplicated files and
+                       delete crashed tmp file.
   """
 
   @doc "Entry point"
@@ -90,6 +92,9 @@ defmodule Feedistiller.CLI do
           IO.puts("Total downloaded bytes: #{report.total_bytes}")
           if report.errors >= 0 do
             IO.puts("Errors: #{report.errors}")
+          end
+          if report.deleted >= 0 do
+            IO.puts("Files deleted: #{report.deleted}")
           end
           IO.puts("Time: #{tformat(timestamp)}")
           if gui do
@@ -183,6 +188,8 @@ defmodule Feedistiller.CLI do
         %{attr | user: user}
       {:password, password} ->
         %{attr | password: password}
+      {:clean, clean} ->
+        %{attr | clean: clean}
       {:only_new, only_new} ->
         %{attr | only_new: only_new}
       {:timeout, timeout} ->
@@ -216,6 +223,7 @@ defmodule Feedistiller.CLI do
       password: :keep,
       help: :boolean,
       gui: :boolean,
+      clean: [:boolean, :keep],
       only_new: [:boolean, :keep],
       timeout: [:integer, :keep],
     ]
