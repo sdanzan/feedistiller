@@ -335,9 +335,9 @@ defmodule Feedistiller.GUI do
   defp move_to_completed_panel(panels, gauge) do
     id = :wxWindow.getId(gauge)
     idx = Enum.find_index(:wxSizer.getChildren(panels.sizer1), fn si -> id == :wxWindow.getId(:wxSizerItem.getWindow(si)) end)
-    :wxSizer.remove(idx + 1)
-    :wxSizer.remove(idx)
-    :wxWindow.reparent(gauge.panels.page2)
+    :wxSizer.remove(panels.sizer1, idx + 1)
+    :wxSizer.remove(panels.sizer1, idx)
+    :wxWindow.reparent(gauge, panels.page2)
     
     flags = :wxSizerFlags.new |> :wxSizerFlags.expand |> :wxSizerFlags.border
     :wxBoxSizer.add(panels.sizer2, gauge, flags)
