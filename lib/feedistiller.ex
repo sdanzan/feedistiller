@@ -295,7 +295,10 @@ defmodule Feedistiller do
   end
 
   defp filename(entry, destination) do
-    Path.join(destination, String.replace(entry.title, ~r/\/|\\/, "|") <> Path.extname(entry.enclosure.url))
+    title = String.replace(entry.title, ~r/\*|<|>|\/|\\|\||"/, "_")
+    title = String.replace(title, "&", "")
+    title = String.replace(title, "?", "")
+    Path.join(destination, title <> Path.extname(entry.enclosure.url))
   end
 
   # Download one enclosure
