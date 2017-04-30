@@ -4,7 +4,8 @@
 
 * Better file name normalization
 * Use separated tabs in GUI for in progress and completed enclosures
-* 'Clean' mode where duplicated and tmp files are deleted
+* '--clean' option where duplicated and tmp files are deleted
+* '--group' option to regroup options applying to multiple feeds
 * Upgrade to Elixir 1.4+
 
 ## 2.0.2

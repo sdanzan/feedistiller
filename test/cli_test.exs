@@ -25,8 +25,11 @@ defmodule Feedistiller.CLI.Test do
   test "parse some options" do
     options = [ "--max-download", "14", "--destination", "destination", "--max", "15", "--name", "ALL", "--timeout", "40",
                 "--feed-url", "url-1", "--max", "3", "--max-download", "2", "--user", "Bilbo", "--password", "SauronSux", "--name", "Le super podcast",
+                "--group", "--destination", "destination-group",
                 "--feed-url", "url-2", "--destination", "destination-2", "--filter-content-type", "^audio", "--max", "unlimited", "--only-new",
-                "--feed-url", "url-3", "--filter-name", "foo", "--min-date", "2015-12-12 12:12:12", "--filter-name", "bar", "--max-date", "2015-12-13 13:13:13", "--clean"
+                "--feed-url", "url-3", "--filter-name", "foo", "--min-date", "2015-12-12 12:12:12", "--filter-name", "bar", "--max-date", "2015-12-13 13:13:13", "--clean",
+                "--group", "--max-download", "5",
+                "--feed-url", "url-4"
               ]
 
     for gui <- [false, true] do
@@ -49,7 +52,7 @@ defmodule Feedistiller.CLI.Test do
       refute g.clean
       assert g.timeout == 40
       
-      [f1, f2, f3] = feeds
+      [f1, f2, f3, f4] = feeds
 
       assert f1.url == "url-1"
       assert f1.destination == Path.expand("destination")
@@ -77,6 +80,7 @@ defmodule Feedistiller.CLI.Test do
       assert f2.timeout == 40
 
       assert f3.url == "url-3"
+      assert f3.destination == Path.expand("destination-group")
       assert f3.filters.name == [~r/bar/, ~r/foo/]
       assert f3.filters.limits.max == 15
       assert f3.filters.limits.from == Timex.parse!("2015-12-12 12:12:12", @format)
@@ -84,6 +88,10 @@ defmodule Feedistiller.CLI.Test do
       refute f3.only_new
       assert f3.clean
       assert f3.timeout == 40
+
+      assert f4.url == "url-4"
+      assert f4.destination == Path.expand("destination")
+      assert f4.max_simultaneous_downloads == 5
     end
   end
 

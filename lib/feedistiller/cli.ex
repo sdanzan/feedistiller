@@ -62,6 +62,8 @@ defmodule Feedistiller.CLI do
   --gui              : show the graphic interface.
   --clean            : do not download anything, try to remove duplicated files and
                        delete crashed tmp file.
+  --group            : following options will be applied to all subsequent feed 
+                       definitions, until another --group option is encountered.
   """
 
   @doc "Entry point"
@@ -127,13 +129,17 @@ defmodule Feedistiller.CLI do
     else
       global_config = %FeedAttributes{max_simultaneous_downloads: :unlimited}
       {options, global_config} = parse_feed_attributes({parsed, global_config})
-      feeds = parse_feeds_config(options, global_config, []) |> :lists.reverse
+      feeds = parse_feeds_config(options, global_config, group_attr(global_config), []) |> :lists.reverse
       {:feeds, [global: global_config, feeds: feeds], check_gui(parsed)}
     end
   end
 
   def help do
     {:help, @help}
+  end
+
+  defp group_attr(global) do
+    %{global | max_simultaneous_downloads: 3}
   end
 
   defp check_atom(_, []), do: false
@@ -148,16 +154,25 @@ defmodule Feedistiller.CLI do
     check_atom(:gui, options)
   end
 
-  defp parse_feeds_config([], _, feeds), do: feeds
+  defp parse_feeds_config([], _, _, feeds), do: feeds
 
-  defp parse_feeds_config([{:feed_url, url} | options], global, feeds) do
-    feed = %{global | url: url, max_simultaneous_downloads: 3}
+  defp parse_feeds_config([{:group, true} | options], global, _, feeds) do
+    {options, group} = parse_feed_attributes({options, group_attr(global)})
+    parse_feeds_config(options, global, group, feeds)
+  end
+
+  defp parse_feeds_config([{:feed_url, url} | options], global, group, feeds) do
+    feed = %{group | url: url}
     {options, feed} = parse_feed_attributes({options, feed})
-    parse_feeds_config(options, global, [feed | feeds])
+    parse_feeds_config(options, global, group, [feed | feeds])
   end
   
   defp parse_feed_attributes({[], attr}) do
     {[], attr}
+  end
+
+  defp parse_feed_attributes({left_options = [{:group, true} | _], attr}) do
+    {left_options, attr}
   end
 
   defp parse_feed_attributes({left_options = [{:feed_url, _} | _], attr}) do
@@ -225,6 +240,7 @@ defmodule Feedistiller.CLI do
       gui: :boolean,
       clean: [:boolean, :keep],
       only_new: [:boolean, :keep],
+      group: [:boolean, :keep],
       timeout: [:integer, :keep],
     ]
   end
