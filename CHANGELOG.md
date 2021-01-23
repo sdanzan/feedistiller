@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.1.0
+
+* Elixir 1.6+
+* Use GenStage instead of GenEvent
+* Bug fixes
+    - Character encoding errors in RSS content no longer make
+      the program crash.
+
 ## 3.0.0
 
 * Better file name normalization
