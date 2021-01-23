@@ -90,7 +90,7 @@ defmodule Feedistiller.Feeder do
   Parse some data.
   
   If the input parameter is a string, it will map to `:feeder.stream/2` with default options.
-  If itś a prop list, it will map to `:feeder.stream/2` after calling your continuation function
+  If it's a prop list, it will map to `:feeder.stream/2` after calling your continuation function
   once to bootstrap the data (curiously `xml_sax_parser` does not do that automatically).
 
   See `xml_sax_parser` documentation for full result type (in case of error, an
@@ -119,7 +119,6 @@ defmodule Feedistiller.Feeder do
     :feeder.stream(data, transform_opts(opts))
   end
 
-  @inline true
   defp transform_opts(opts) do
     if opts[:event_fun] do
       Keyword.put(opts, :event_fun, fn e, acc -> opts[:event_fun].(event(e), acc) end)
@@ -128,7 +127,6 @@ defmodule Feedistiller.Feeder do
     end
   end
 
-  @inline true
   defp default_opts do
     [
       event_state: %Channel{},
@@ -136,16 +134,29 @@ defmodule Feedistiller.Feeder do
     ]
   end
 
-  @inline true
   defp efun(:endFeed, channel), do: %{channel | entries: :lists.reverse(channel.entries)}
   defp efun(f = %Feed{}, channel), do: %{channel | feed: f}
   defp efun(e = %Entry{}, channel), do: %{channel | entries: [e | channel.entries]}
 
-  @inline true
+  defp is_valid_utf8?(<<_ :: utf8, rest :: binary>>), do: is_valid_utf8?(rest)
+  defp is_valid_utf8?(<<>>), do: :true
+  defp is_valid_utf8?(<<_ :: binary>>), do: :false
+
+  defp to_utf8(<<s :: binary>>) do
+    if is_valid_utf8?(s) do
+      s
+    else
+      # Try latin1 and if invalid, truncate
+      case :unicode.characters_to_binary(s, :latin1) do
+        <<s :: binary>> -> s
+        {_, <<s :: binary>>, _} -> s <> "-TRUNCATED"
+      end
+    end
+  end
+
   defp ws(:undefined), do: nil
-  defp ws(any), do: any
+  defp ws(any), do: to_utf8(any)
   
-  @inline true
   defp wd(:undefined), do: nil
   defp wd(any) do
     case Timex.parse(any, "{RFC1123}") do
@@ -154,7 +165,6 @@ defmodule Feedistiller.Feeder do
     end
   end
 
-  @inline true
   defp wl(:undefined), do: nil
   defp wl(any) do
     try do
@@ -164,7 +174,6 @@ defmodule Feedistiller.Feeder do
     end
   end
 
-  @inline true
   defp event(:endFeed), do: :endFeed
 
   defp event({:feed, {:feed, author, id, image, language, link, subtitle, summary, title, updated, _url}}) do
@@ -179,7 +188,6 @@ defmodule Feedistiller.Feeder do
                   title: ws(title), updated: wd(updated)}
   end
 
-  @inline true
   defp enclosure(:undefined), do: nil
   defp enclosure({:enclosure, url, size, type}) do
     %Feeder.Enclosure{url: ws(url), size: wl(size), type: ws(type)}
