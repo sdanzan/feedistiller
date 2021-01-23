@@ -96,7 +96,7 @@ defmodule Feedistiller.GUI do
 
     {p1, s1} = panel(t, 'Feeds')
     {p2, s2} = panel(t, 'Active downloads')
-    {p3, s3} = panel(t, 'Finished downloads')
+    {p3, s3} = panel(t, 'Completed downloads')
 
     :wxFrame.show(f)
 
@@ -246,7 +246,8 @@ defmodule Feedistiller.GUI do
     info = Map.fetch!(state.feeds.f, event.feed.name)
     info = %{info | current: info.current - 1, total: info.total + 1, bytes: info.bytes + written}
     set_header_text(event.feed, info)
-    {_, _, gaugepanel} = Map.fetch!(state.items.i, filename)
+    {gauge, _, gaugepanel} = Map.fetch!(state.items.i, filename)
+    :wxGauge.destroy(gauge)
     move_to_completed_panel(state.items, gaugepanel)
     :wxPanel.setBackgroundColour(gaugepanel, @green)
     :wxPanel.refresh(gaugepanel)
@@ -269,7 +270,8 @@ defmodule Feedistiller.GUI do
     info = Map.fetch!(state.feeds.f, event.feed.name)
     info = %{info | current: info.current - 1}
     set_header_text(event.feed, info)
-    {_, _, gaugepanel} = Map.fetch!(state.items.i, filename)
+    {gauge, _, gaugepanel} = Map.fetch!(state.items.i, filename)
+    :wxGauge.destroy(gauge)
     move_to_completed_panel(state.items, gaugepanel)
     :wxPanel.setBackgroundColour(gaugepanel, @red)
     :wxPanel.refresh(gaugepanel)
