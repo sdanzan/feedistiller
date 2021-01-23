@@ -14,23 +14,61 @@
 
 defmodule Feedistiller.Reporter do
   @moduledoc """
-  Reporting functions.
+  Reporting functions and event broadcast
   """
 
+  use GenStage
   require Logger
   import Feedistiller.Util
 
   @doc "The stream of download events"
-  @spec stream() :: GenEvent.Stream.t
-  def stream, do: GenEvent.stream(Feedistiller.Reporter)
+  @spec stream() :: GenStage.Stream.t
+  def stream, do: GenStage.stream([{Feedistiller.Reporter, max_demand: 1}])
+  
+  @doc "Notify an event for the reporter to broadcast"
+  @spec notify(Feedistiller.Event.t) :: :ok
+  def notify(event) do
+    GenStage.cast(__MODULE__, {:notify, event})
+  end
+
+  def start_link(_) do
+    GenStage.start_link(__MODULE__, :ok, name: __MODULE__)
+  end
+
+  @impl true
+  def init(:ok) do
+    {:producer, :ok, dispatcher: GenStage.BroadcastDispatcher}
+  end
+
+  @impl true
+  def handle_cast({:notify, event}, state) do
+    {:noreply, [event], state}
+  end
+
+  @impl true
+  def handle_demand(_demand, state) do
+    {:noreply, [], state}
+  end
   
   defmodule Reported do
-    @moduledoc "Name of the agent storing state"
+    @moduledoc "Agent storing state for what has happened"
+    use Agent
+
+    def start_link(_arg) do
+      Agent.start_link(fn -> %{errors: 0, download: 0, total_bytes: 0, download_successful: 0, deleted: 0} end, name: __MODULE__)
+    end
   end
   
   defmodule StreamToReported do
     @moduledoc "A process forwarding events to the `Feedistiller.Reporter.Reported` Agent."
     
+    def child_spec(_arg) do
+      %{
+        id: StreamToReported,
+        start: {StreamToReported, :start_link, []}
+      }
+    end
+
     def start_link do
       pid = spawn_link(fn ->
         for %Feedistiller.Event{entry: entry, event: event} <- Feedistiller.Reporter.stream do

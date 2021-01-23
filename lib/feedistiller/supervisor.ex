@@ -14,30 +14,29 @@
 
 defmodule Feedistiller.Supervisor do
   @moduledoc "Supervisor for Feedistiller. Essentially ensures the event reporter is started."
-  
+ 
   use Supervisor
   use Application
-  
-  @doc "Let's start!"
+ 
+  @impl true
   def start(_, _) do
     start_link()
   end
-  
+ 
   @doc "Let's start!"
   def start_link do
-    Supervisor.start_link(__MODULE__, :ok)
+    Supervisor.start_link(__MODULE__, :ok, [])
   end
-  
-  @reporter_name Feedistiller.Reporter
-  @reported_name Feedistiller.Reporter.Reported
-  
+ 
+ 
+  @impl true
   def init(:ok) do
     children = [
-      worker(GenEvent, [[name: @reporter_name]]),
-      worker(Agent, [fn -> %{errors: 0, download: 0, total_bytes: 0, download_successful: 0, deleted: 0} end, [name: @reported_name]]),
-      worker(Feedistiller.Reporter.StreamToReported, [])
+      Feedistiller.Reporter,
+      Feedistiller.Reporter.Reported,
+      Feedistiller.Reporter.StreamToReported
     ]
     
-    supervise(children, strategy: :one_for_one)
+    Supervisor.init(children, strategy: :one_for_one)
   end
 end

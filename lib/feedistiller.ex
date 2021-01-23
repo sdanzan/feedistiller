@@ -115,7 +115,7 @@ defmodule Feedistiller do
   Download a set of feeds according to their settings, with `max` simultaneous
   downloads at the same time across all feeds.
   """
-  @spec download_feeds(list(FeedAttributes.t), integer) :: :ok
+  @spec download_feeds(list(FeedAttributes.t), integer | Semaphore.t | nil) :: :ok
   def download_feeds(feeds, max)
   when is_list(feeds) and is_integer(max) and max > 0
   do
@@ -124,11 +124,6 @@ defmodule Feedistiller do
     Semaphore.destroy(semaphore)
   end
 
-  @doc """
-  Download a set of feeds according to their settings, using the given `semaphore`
-  to limit the number of simultaneous downloads.
-  """
-  @spec download_feeds(list(FeedAttributes.t), Semaphore.t | nil) :: :ok
   def download_feeds(feeds, semaphore)
   when is_list(feeds) and (is_map(semaphore) or is_nil(semaphore))
   do
@@ -167,7 +162,7 @@ defmodule Feedistiller do
       :ok = File.mkdir_p(destination)
     rescue
       e ->
-        GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: {:error_destination, destination}})
+        Feedistiller.Reporter.notify(%Event{feed: feed, event: {:error_destination, destination}})
         raise e
     end
 
@@ -204,7 +199,7 @@ defmodule Feedistiller do
 
   defp remove_file(file, feed) do
     File.rm!(file)
-    GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: {:clean, file}})
+    Feedistiller.Reporter.notify(%Event{feed: feed, event: {:clean, file}})
   end
 
   defp check_file(file, feed) do
@@ -218,15 +213,15 @@ defmodule Feedistiller do
         end
       end
     rescue
-      _ -> GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: {:bad_clean, file}})
+      _ -> Feedistiller.Reporter.notify(%Event{feed: feed, event: {:bad_clean, file}})
     end
   end
 
   defp clean(destination, feed, sem) do
     acquire(sem)
-    GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: :begin_clean})
+    Feedistiller.Reporter.notify(%Event{feed: feed, event: :begin_clean})
     Path.wildcard(destination <> "/*") |> Enum.each(&check_file(&1, feed))
-    GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: :end_clean})
+    Feedistiller.Reporter.notify(%Event{feed: feed, event: :end_clean})
   after
     release(sem)
   end
@@ -235,7 +230,7 @@ defmodule Feedistiller do
     {t, _} = Timex.Duration.measure(fn ->
       try do
         acquire(semaphores)
-        GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: :begin_feed})
+        Feedistiller.Reporter.notify(%Event{feed: feed, event: :begin_feed})
         Http.stream_get!(feed.url,
           fn (chunk, chunks) ->
             :ok = BlockingQueue.enqueue(chunks, chunk)
@@ -243,13 +238,13 @@ defmodule Feedistiller do
           end,
           chunks, feed.timeout, feed.user, feed.password)
       rescue
-        _ -> GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: :bad_url})
+        _ -> Feedistiller.Reporter.notify(%Event{feed: feed, event: :bad_url})
       after
         BlockingQueue.complete(chunks)
         release(semaphores)
       end
     end)
-    GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: {:end_feed, t}})
+    Feedistiller.Reporter.notify(%Event{feed: feed, event: {:end_feed, t}})
   end
 
   defp match_filters(_, []), do: true
@@ -272,7 +267,7 @@ defmodule Feedistiller do
                 {entries, count}
               end
             (channel = %Feeder.Feed{}, state) ->
-              GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: {:channel_complete, channel}})
+              Feedistiller.Reporter.notify(%Event{feed: feed, event: {:channel_complete, channel}})
               state
             (_, state) -> state
           end,
@@ -282,14 +277,14 @@ defmodule Feedistiller do
               {:ok, chunk} -> {chunk, chunks}
               state ->
                 if state == :error do
-                  GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: :bad_feed})
+                  Feedistiller.Reporter.notify(%Event{feed: feed, event: :bad_feed})
                 end
                 {"", chunks}
             end
           end
         ])
     rescue
-      _ -> GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: :bad_feed})
+      _ -> Feedistiller.Reporter.notify(%Event{feed: feed, event: :bad_feed})
     after # whatever happens we complete the entry queue
       BlockingQueue.complete(entries)
     end
@@ -353,7 +348,7 @@ defmodule Feedistiller do
     CountDown.increase(countdown)
     spawn_link(fn -> 
       filename = filename(entry, destination)
-      GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, destination: destination, entry: entry, event: {:begin, filename}})
+      Feedistiller.Reporter.notify(%Event{feed: feed, destination: destination, entry: entry, event: {:begin, filename}})
       get_enclosure(filename, entry, feed)
       CountDown.signal(countdown)
       release(semaphores)
@@ -376,7 +371,7 @@ defmodule Feedistiller do
               s = current_size + byte_size(chunk)
               c = current_chunk + byte_size(chunk)
               c = if c > @chunk_limit do
-                GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:write, filename, s}})
+                Feedistiller.Reporter.notify(%{event | event: {:write, filename, s}})
                 0
               else
                 c
@@ -388,13 +383,13 @@ defmodule Feedistiller do
           end)
           File.close(file)
           File.rename(tmp_filename, filename)
-          GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:finish_write, filename, written, time}})
+          Feedistiller.Reporter.notify(%{event | event: {:finish_write, filename, written, time}})
         rescue
-          e -> GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:error_write, filename, e}})
+          e -> Feedistiller.Reporter.notify(%{event | event: {:error_write, filename, e}})
           File.close(file)
           File.rm(tmp_filename)
         end
-      e -> GenEvent.ack_notify(Feedistiller.Reporter, %{event | event: {:error_write, filename, e}})
+      e -> Feedistiller.Reporter.notify(%{event | event: {:error_write, filename, e}})
     end
   end
 
@@ -409,7 +404,7 @@ defmodule Feedistiller do
       CountDown.wait(countdown)
       CountDown.destroy(countdown)
     end)
-    GenEvent.ack_notify(Feedistiller.Reporter, %Event{feed: feed, event: {:end_enclosures, t}})
+    Feedistiller.Reporter.notify(%Event{feed: feed, event: {:end_enclosures, t}})
   end
   
   defp get_sem(max) do

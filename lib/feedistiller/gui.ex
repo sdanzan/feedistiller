@@ -29,6 +29,8 @@ defmodule Feedistiller.GUI do
   @blue {0, 0, 255}
   @green {0, 255, 0}
   @yellow {255, 255, 0}
+  @start_width 600
+  @start_height 371
 
   defstruct wx: nil, frame: nil,
             data: %{current: 0, total: 0, total_bytes: 0, finished: 0, complete: false, time: nil},
@@ -51,10 +53,10 @@ defmodule Feedistiller.GUI do
 
   defp set_status_text(f, data) do
     if data.complete do
-      :wxFrame.setStatusText(f, String.to_char_list(
+      :wxFrame.setStatusText(f, String.to_charlist(
         "Downloaded: #{data.total} - Downloading: finished - Bytes: #{data.total_bytes} (#{hrbytes(data.total_bytes)}) - Finished: #{data.finished} - Time: #{tformat(data.time)}"))
     else
-      :wxFrame.setStatusText(f, String.to_char_list(
+      :wxFrame.setStatusText(f, String.to_charlist(
         "Downloaded: #{data.total} - Downloading: #{data.current} - Bytes: #{data.total_bytes} (#{hrbytes(data.total_bytes)}) - Finished: #{data.finished}"))
     end
   end
@@ -71,7 +73,7 @@ defmodule Feedistiller.GUI do
     end
     s = s <> "\nBytes: #{info.bytes}"
     s = if info.bytes >= 1024, do: s <> " (#{hrbytes(info.bytes)})#{}", else: s
-    :wxStaticText.setLabel(info.header, String.to_char_list(s))
+    :wxStaticText.setLabel(info.header, String.to_charlist(s))
   end
 
   defp panel(t, n) do
@@ -85,7 +87,7 @@ defmodule Feedistiller.GUI do
 
   def init({parent, stream}) do
     w = :wx.new()
-    f = :wxFrame.new(w, -1, 'Feedistiller - running', [size: {600, 371}])
+    f = :wxFrame.new(w, -1, 'Feedistiller - running', [size: {@start_width, @start_height}])
     pid = self()
     :wxFrame.connect(f, :close_window, [callback: fn (_, _) -> GenServer.cast(pid, {:close, parent}) end]) 
     :wxFrame.createStatusBar(f)
@@ -186,7 +188,7 @@ defmodule Feedistiller.GUI do
     insizer = :wxBoxSizer.new(:wx_const.wx_vertical)
     :wxPanel.setSizer(inpanel, insizer)
     name = event.feed.name <> " - " <> dformat(event.entry.updated) <> ": " <> event.entry.title
-    :wxBoxSizer.add(insizer, :wxStaticText.new(inpanel, -1, String.to_char_list(name)))
+    :wxBoxSizer.add(insizer, :wxStaticText.new(inpanel, -1, String.to_charlist(name)))
     gauge = :wxGauge.new(inpanel, -1, -1)
     case event.entry.enclosure.size do
       nil -> :wxGauge.pulse(gauge)
@@ -316,7 +318,7 @@ defmodule Feedistiller.GUI do
       label
     end
     label = if !is_nil(time), do: label <> " - Time: #{tformat(time)}", else: label
-    :wxStaticText.setLabel(bytes, String.to_char_list(label))
+    :wxStaticText.setLabel(bytes, String.to_charlist(label))
   end
 
   defp handle_bad_feed(event, state) do

@@ -100,7 +100,7 @@ defmodule Feedistiller.CLI do
           end
           IO.puts("Time: #{tformat(timestamp)}")
           if gui do
-            GenEvent.ack_notify(Feedistiller.Reporter, %Feedistiller.Event{event: {:complete, timestamp}})
+            Feedistiller.Reporter.notify(%Feedistiller.Event{event: {:complete, timestamp}})
             receive do
               :close -> nil
             end
