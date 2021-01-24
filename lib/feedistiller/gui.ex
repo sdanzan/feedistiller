@@ -25,8 +25,9 @@ defmodule Feedistiller.GUI do
   alias Feedistiller.Feeder
   alias Feedistiller.GUI
 
+  @defaultcolor {236, 236, 236}
   @red {255, 0, 0}
-  @blue {0, 0, 255}
+  @blue {73, 167, 244}
   @green {0, 255, 0}
   @yellow {255, 255, 0}
   @start_width 600
@@ -72,6 +73,11 @@ defmodule Feedistiller.GUI do
       :wxStaticText.setBackgroundColour(info.header, @green)
       s <> "\nDownloading: finished (time: #{tformat(info.time)})"
     else
+      if info.current > 0 do
+        :wxStaticText.setBackgroundColour(info.header, @blue)
+      else
+        :wxStaticText.setBackgroundColour(info.header, @defaultcolor)
+      end
       s <> "\nDownloading: #{info.current}"
     end
     s = s <> "\nBytes: #{info.bytes}"
