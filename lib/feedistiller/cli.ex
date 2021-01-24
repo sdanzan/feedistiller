@@ -41,7 +41,7 @@ defmodule Feedistiller.CLI do
                        put before any `--feed-url` option, it will limit the 
                        total number of download across all feeds instead (this
                        means it can be cumulated with a feed specific 
-                       'max-download' option).
+                       'max-download' option). Defaults to 3 per feed.
   --max MAX          : maximum number of files to download per feed (can be 
                        'unlimited' for no limit)
   --min-date MINDATE : download files from item newer than this date. Date 
@@ -88,6 +88,8 @@ defmodule Feedistiller.CLI do
                 Feedistiller.download_feeds(feeds[:feeds], max)
             end
           end)
+          Feedistiller.Reporter.notify(%Feedistiller.Event{event: {:complete, timestamp}})
+          Feedistiller.Reporter.wait_flushed()
           IO.puts("Finished!")
           report = Agent.get(Feedistiller.Reporter.Reported, fn s -> s end)
           IO.puts("Downloaded files: #{report.download} (#{report.download_successful} successful)")
@@ -100,7 +102,6 @@ defmodule Feedistiller.CLI do
           end
           IO.puts("Time: #{tformat(timestamp)}")
           if gui do
-            Feedistiller.Reporter.notify(%Feedistiller.Event{event: {:complete, timestamp}})
             receive do
               :close -> nil
             end

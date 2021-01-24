@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.1.1
+
+* Bug fix: ensure all informational events have been flushed before printing final status
+
 ## 3.1.0
 
 * Elixir 1.6+

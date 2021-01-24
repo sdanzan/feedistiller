@@ -56,13 +56,13 @@ defmodule Feedistiller.Feeder.Test do
   test "parse file" do
     {:ok, channel = %Feeder.Channel{}, tail} = Feeder.file(feed_file())
     check_channel(channel)
-    assert String.strip(tail) == ""
+    assert String.trim(tail) == ""
   end
 
   test "parse data" do
     {:ok, channel = %Feeder.Channel{}, tail} = Feeder.stream(File.read!(feed_file()))
     check_channel(channel)
-    assert String.strip(tail) == ""
+    assert String.trim(tail) == ""
   end
 
   test "parse data partial" do
@@ -79,6 +79,6 @@ defmodule Feedistiller.Feeder.Test do
 
     {:ok, channel = %Feeder.Channel{}, tail} = Feeder.stream(opts)
     check_channel(channel)
-    assert String.strip(tail) == ""
+    assert String.trim(tail) == ""
   end
 end

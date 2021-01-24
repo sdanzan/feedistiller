@@ -20,6 +20,7 @@ defmodule Feedistiller.Reporter do
   use GenStage
   require Logger
   import Feedistiller.Util
+  alias Alambic.CountDown
 
   @doc "The stream of download events"
   @spec stream() :: GenStage.Stream.t
@@ -32,7 +33,18 @@ defmodule Feedistiller.Reporter do
   end
 
   def start_link(_) do
-    GenStage.start_link(__MODULE__, :ok, name: __MODULE__)
+    {:ok, pgs} = GenStage.start_link(__MODULE__, :ok, name: __MODULE__)
+    %CountDown{id: pcd} = CountDown.create_link(2)
+    Process.register(pcd, :flushed_check)
+    {:ok, pgs}
+  end
+
+  def wait_flushed() do
+    CountDown.wait(%CountDown{id: :flushed_check})
+  end
+
+  def signal_flushed() do
+    CountDown.signal(%CountDown{id: :flushed_check})
   end
 
   @impl true
@@ -73,6 +85,8 @@ defmodule Feedistiller.Reporter do
       pid = spawn_link(fn ->
         for %Feedistiller.Event{entry: entry, event: event} <- Feedistiller.Reporter.stream do
           case event do
+            {:complete, _} ->
+              Feedistiller.Reporter.signal_flushed()
             {:begin, _filename} ->
               Agent.cast(Reported, fn state -> %{state | download: state.download + 1} end)
             {:finish_write, _filename, written, _time} ->
@@ -132,6 +146,7 @@ defmodule Feedistiller.Reporter do
 
   defp log(%Feedistiller.Event{feed: feed, destination: destination, entry: entry, event: event}, log_info, log_error) do
     case event do
+      {:complete, _} -> Feedistiller.Reporter.signal_flushed()
       :begin_feed -> log_info.("Starting downloading feed #{feed.name}\n")
       {:end_feed, time} -> log_info.("Finished downloading feed #{feed.name} (#{tformat(time)})\n")
       {:end_enclosures, time} -> log_info.("Finished downloading enclosures for #{feed.name} (#{tformat(time)})\n")
