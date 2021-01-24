@@ -40,7 +40,10 @@ defmodule Feedistiller.GUI do
   defp hrbytes(bytes) do
     case div(bytes, 1024*1024) do
       0 -> "#{div(bytes, 1024)}K"
-      n -> "#{n}M"
+      n -> case div(n, 1024) do
+        0 -> "#{n}M"
+        m -> "#{m}.#{n - m * 1024}G"
+      end
     end
   end
 
