@@ -110,12 +110,8 @@ defmodule Feedistiller.CLI.Test do
     File.read!("test/data/enclosure.xml")
   end
 
-  defp reset_reported do
-    Agent.update(Reported, fn _ -> %{errors: 0, download: 0, total_bytes: 0, download_successful: 0, deleted: 0} end)
-  end
-
   setup do
-    reset_reported()
+    Feedistiller.Reporter.reset()
     on_exit(nil, fn -> 
       File.rm_rf!("tmp")
     end)

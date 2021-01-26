@@ -39,6 +39,15 @@ defmodule Feedistiller.Reporter do
     {:ok, pgs}
   end
 
+  def initial_state() do
+    %{errors: 0, download: 0, total_bytes: 0, download_successful: 0, deleted: 0} 
+  end
+
+  def reset() do
+    CountDown.reset(%CountDown{id: :flushed_check}, 2)
+    Agent.update(Feedistiller.Reporter.Reported, fn _ -> initial_state() end)
+  end
+
   def wait_flushed() do
     CountDown.wait(%CountDown{id: :flushed_check})
   end
@@ -67,7 +76,7 @@ defmodule Feedistiller.Reporter do
     use Agent
 
     def start_link(_arg) do
-      Agent.start_link(fn -> %{errors: 0, download: 0, total_bytes: 0, download_successful: 0, deleted: 0} end, name: __MODULE__)
+      Agent.start_link(&Feedistiller.Reporter.initial_state/0, name: __MODULE__)
     end
   end
   
