@@ -29,7 +29,7 @@ defmodule Feedistiller.CLI.Test do
                 "--feed-url", "url-2", "--destination", "destination-2", "--filter-content-type", "^audio", "--max", "unlimited", "--only-new",
                 "--feed-url", "url-3", "--filter-name", "foo", "--min-date", "2015-12-12 12:12:12", "--filter-name", "bar", "--max-date", "2015-12-13 13:13:13", "--clean",
                 "--group", "--max-download", "5",
-                "--feed-url", "url-4"
+                "--feed-url", "url-4", "--dir", "the-dir"
               ]
 
     for gui <- [false, true] do
@@ -65,6 +65,7 @@ defmodule Feedistiller.CLI.Test do
       assert f1.user == "Bilbo"
       assert f1.password == "SauronSux"
       assert f1.name == "Le super podcast"
+      assert f1.dir == "Le super podcast"
       refute f1.only_new
       refute f1.clean
       assert f1.timeout == 40
@@ -75,6 +76,7 @@ defmodule Feedistiller.CLI.Test do
       assert f2.filters.limits.max == :unlimited
       assert f2.filters.mime == [~r/^audio/]
       assert f2.name == "ALL"
+      assert f2.dir == "ALL"
       assert f2.only_new
       refute f2.clean
       assert f2.timeout == 40
@@ -92,6 +94,7 @@ defmodule Feedistiller.CLI.Test do
       assert f4.url == "url-4"
       assert f4.destination == Path.expand("destination")
       assert f4.max_simultaneous_downloads == 5
+      assert f4.dir == "the-dir"
     end
   end
 

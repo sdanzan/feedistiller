@@ -35,7 +35,10 @@ defmodule Feedistiller.CLI do
   --name NAME        : name of the feed. This is used as subdirectory in destination.                     
 
   --destination DEST : root directory to put downloaded files. they will be put
-                       in a subdirectory bearing the feed name.
+                       in a subdirectory bearing the feed name or dir option value.
+
+  --dir DIR          : name of the subdirectory where the files will be put. Defaults
+                       to `--name`.
 
   --max-download MAX : maximum number of simultaneous downloads for a feed. If
                        put before any `--feed-url` option, it will limit the 
@@ -129,7 +132,7 @@ defmodule Feedistiller.CLI do
       help()
     else
       global_config = %FeedAttributes{max_simultaneous_downloads: :unlimited}
-      {options, global_config} = parse_feed_attributes({parsed, global_config})
+      {options, global_config} = parse_feed_attributes({parsed, global_config}, true)
       feeds = parse_feeds_config(options, global_config, group_attr(global_config), []) |> :lists.reverse
       {:feeds, [global: global_config, feeds: feeds], check_gui(parsed)}
     end
@@ -158,34 +161,44 @@ defmodule Feedistiller.CLI do
   defp parse_feeds_config([], _, _, feeds), do: feeds
 
   defp parse_feeds_config([{:group, true} | options], global, _, feeds) do
-    {options, group} = parse_feed_attributes({options, group_attr(global)})
+    {options, group} = parse_feed_attributes({options, group_attr(global)}, true)
     parse_feeds_config(options, global, group, feeds)
   end
 
   defp parse_feeds_config([{:feed_url, url} | options], global, group, feeds) do
     feed = %{group | url: url}
-    {options, feed} = parse_feed_attributes({options, feed})
+    {options, feed} = parse_feed_attributes({options, feed}, false)
     parse_feeds_config(options, global, group, [feed | feeds])
   end
+
+  defp set_dir(attr, is_group) do
+    if not is_group and attr.dir == "" do
+      %{attr | dir: attr.name}
+    else
+      attr
+    end
+  end
   
-  defp parse_feed_attributes({[], attr}) do
-    {[], attr}
+  defp parse_feed_attributes({[], attr}, is_group) do
+    {[], set_dir(attr, is_group)}
   end
 
-  defp parse_feed_attributes({left_options = [{:group, true} | _], attr}) do
-    {left_options, attr}
+  defp parse_feed_attributes({left_options = [{:group, true} | _], attr}, is_group) do
+    {left_options, set_dir(attr, is_group)}
   end
 
-  defp parse_feed_attributes({left_options = [{:feed_url, _} | _], attr}) do
-    {left_options, attr}
+  defp parse_feed_attributes({left_options = [{:feed_url, _} | _], attr}, is_group) do
+    {left_options, set_dir(attr, is_group)}
   end
 
-  defp parse_feed_attributes({[option | left_options], attr}) do
+  defp parse_feed_attributes({[option | left_options], attr}, is_group) do
     attributes = case option do
       {:destination, destination} -> 
         %{attr | destination: Path.expand(destination)}
       {:name, name} ->
         %{attr | name: name}
+      {:dir, dir} ->
+        %{attr | dir: dir}
       {:max_download, max} -> 
         %{attr | max_simultaneous_downloads: String.to_integer(max)}
       {:min_date, date} ->
@@ -212,7 +225,7 @@ defmodule Feedistiller.CLI do
         %{attr | timeout: timeout}
       _ -> attr
     end
-    parse_feed_attributes({left_options, attributes})
+    parse_feed_attributes({left_options, attributes}, is_group)
   end
 
   defp parse_date(date) do
@@ -227,6 +240,7 @@ defmodule Feedistiller.CLI do
   defp switches do
     [
       name: :keep,
+      dir: :keep,
       destination: :keep,
       feed_url: :keep,
       max_download: :keep,
@@ -256,6 +270,7 @@ defmodule Feedistiller.CLI do
       c: :filter_content_type,
       N: :filter_name,
       n: :name,
+      d: :dir,
       u: :user,
       p: :password,
       h: :help

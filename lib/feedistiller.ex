@@ -42,9 +42,11 @@ defmodule Feedistiller.FeedAttributes do
   @moduledoc """
   The attributes of a feed to download.
 
+  - `name:` a name for the feed
   - `url:` web address of the feed
   - `user:` user for protected feed
   - `password:` password for protected feed
+  - `dir:` subdirectory where the downloaded items will be put under the `destination` directory
   - `destination:` the directory where to put the downloaded items (they will be put in a subdirectory
     with the same name as the feed). Default is `.` (current directory)
   - `max_simultaneous_downloads:` the maximum number of item to download at the same time (default is 3)
@@ -52,10 +54,10 @@ defmodule Feedistiller.FeedAttributes do
   - `timeout:` timeout applied to http operations
   """
 
-  defstruct name: "", url: "", filters: %Feedistiller.Filters{},
+  defstruct name: "", url: "", filters: %Feedistiller.Filters{}, dir: "",
             destination: ".", max_simultaneous_downloads: 3, user: "", password: "",
             only_new: false, timeout: 60, clean: false
-  @type t :: %__MODULE__{name: String.t, url: String.t, filters: Filters.t, destination: String.t,
+  @type t :: %__MODULE__{name: String.t, url: String.t, filters: Filters.t, dir: String.t, destination: String.t,
                          max_simultaneous_downloads: :unlimited | integer, user: String.t, password: String.t,
                          only_new: boolean, timeout: integer, clean: boolean}
 end
@@ -157,7 +159,7 @@ defmodule Feedistiller do
   when is_map(global_sem) or is_nil(global_sem)
   do
     # Check we can write to destination
-    destination = Path.join(feed.destination, feed.name) |> Path.expand
+    destination = Path.join(feed.destination, feed.dir) |> Path.expand
     try do
       :ok = File.mkdir_p(destination)
     rescue

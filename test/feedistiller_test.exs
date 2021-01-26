@@ -57,6 +57,7 @@ defmodule Feedistiller.Test do
         url: "feed_url",
         destination: "tmp",
         name: "test",
+        dir: "test",
         filters: %Filters{limits: %Limits{max: 2}}
       }
 
@@ -75,6 +76,7 @@ defmodule Feedistiller.Test do
         url: "feed_url",
         destination: "tmp",
         name: "test",
+        dir: "test",
         filters: %Filters{limits: %Limits{max: 1}},
         only_new: true
       }
@@ -101,6 +103,7 @@ defmodule Feedistiller.Test do
         url: "feed_url",
         destination: "tmp",
         name: "test",
+        dir: "test",
         filters: %Filters{
           limits: %Limits{
             max: 2,
@@ -125,6 +128,7 @@ defmodule Feedistiller.Test do
         url: "feed_url",
         destination: "tmp",
         name: "test",
+        dir: "test",
         filters: %Filters{name: [~r/Item 1|Item 4/]}
       }
 
@@ -143,6 +147,7 @@ defmodule Feedistiller.Test do
         url: "feed_url",
         destination: "tmp",
         name: "test",
+        dir: "test",
         filters: %Filters{mime: [~r/xml/]}
       }
 
@@ -160,6 +165,7 @@ defmodule Feedistiller.Test do
       feed = %FeedAttributes{
         url: "feed_url",
         destination: "tmp",
+        dir: "test",
         name: "test"
       }
 
@@ -187,6 +193,7 @@ defmodule Feedistiller.Test do
       feeds = [%FeedAttributes{
         url: "feed_url",
         destination: "tmp",
+        dir: "test",
         name: "test"
       }]
 
@@ -204,6 +211,7 @@ defmodule Feedistiller.Test do
       feeds = [%FeedAttributes{
         url: "feed_url",
         destination: "tmp",
+        dir: "test",
         name: "test"
       }]
 
@@ -220,6 +228,7 @@ defmodule Feedistiller.Test do
     feed = %FeedAttributes{
       url: "feed_url",
       destination: "/kjdsahgfsdhdl",
+      dir: "test",
       name: "test",
     }
 
