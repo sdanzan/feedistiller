@@ -5,10 +5,10 @@ defmodule Feedistiller.Mixfile do
 
   def project do
     [app: :feedistiller,
-     version: "3.1.1",
+     version: "3.2.0",
      description: @description,
      package: package(),
-     elixir: ">= 1.6.0",
+     elixir: ">= 1.11.0",
      escript: escript_config(),
      test_coverage: [tool: ExCoveralls],
      preferred_cli_env: [coveralls: :test],
@@ -39,15 +39,16 @@ defmodule Feedistiller.Mixfile do
     [
       {:alambic, "~> 1.1.0"},
       {:gen_stage, "~> 1.0.0"},
-      {:httpoison, ">= 0.11.2"},
-      {:feeder, ">= 2.2.1"},
-      {:timex, ">= 3.0.0"},
+      {:httpoison, "~> 1.8.0"},
+      {:feeder, "~> 2.3.2"},
+      {:timex, "~> 3.6.3"},
+      {:yaml_elixir, "~> 2.5.0"},
       # Uncomment following line if you want to build the escript
       # {:tzdata, "== 0.1.8", override: true},
-      {:earmark, ">= 1.2.0", only: :docs},
-      {:ex_doc, ">= 0.14.0", only: :docs},
-      {:mock, ">= 0.2.0", only: :test},
-      {:excoveralls, ">= 0.6.3", only: :test}
+      {:earmark, "~> 1.4.12", only: :docs},
+      {:ex_doc, "~> 0.23.0", only: :docs},
+      {:mock, "~> 0.3.6", only: :test},
+      {:excoveralls, "~> 0.13.4", only: :test}
     ]
   end
 

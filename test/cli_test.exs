@@ -3,9 +3,8 @@ defmodule Feedistiller.CLI.Test do
   import Mock
 
   doctest Feedistiller.CLI
-  
-  alias Feedistiller.CLI 
-  alias Feedistiller.Reporter.Reported
+
+  alias Feedistiller.CLI
 
   test "help option gives help" do
     assert {:help, help} = CLI.parse_argv(["--help"])
@@ -22,16 +21,7 @@ defmodule Feedistiller.CLI.Test do
 
   @format "{YYYY}-{M}-{D} {h24}:{m}:{s}"
 
-  test "parse some options" do
-    options = [ "--max-download", "14", "--destination", "destination", "--max", "15", "--name", "ALL", "--timeout", "40",
-                "--feed-url", "url-1", "--max", "3", "--max-download", "2", "--user", "Bilbo", "--password", "SauronSux", "--name", "Le super podcast",
-                "--group", "--destination", "destination-group",
-                "--feed-url", "url-2", "--destination", "destination-2", "--filter-content-type", "^audio", "--max", "unlimited", "--only-new",
-                "--feed-url", "url-3", "--filter-name", "foo", "--min-date", "2015-12-12 12:12:12", "--filter-name", "bar", "--max-date", "2015-12-13 13:13:13", "--clean",
-                "--group", "--max-download", "5",
-                "--feed-url", "url-4", "--dir", "the-dir"
-              ]
-
+  defp parse_some_options(options) do
     for gui <- [false, true] do
       options = if gui do
         [p1, p2 | opts] = options
@@ -51,7 +41,7 @@ defmodule Feedistiller.CLI.Test do
       refute g.only_new
       refute g.clean
       assert g.timeout == 40
-      
+
       [f1, f2, f3, f4] = feeds
 
       assert f1.url == "url-1"
@@ -83,7 +73,7 @@ defmodule Feedistiller.CLI.Test do
 
       assert f3.url == "url-3"
       assert f3.destination == Path.expand("destination-group")
-      assert f3.filters.name == [~r/bar/, ~r/foo/]
+      assert f3.filters.name -- [~r/bar/, ~r/foo/] == []
       assert f3.filters.limits.max == 15
       assert f3.filters.limits.from == Timex.parse!("2015-12-12 12:12:12", @format)
       assert f3.filters.limits.to == Timex.parse!("2015-12-13 13:13:13", @format)
@@ -96,6 +86,23 @@ defmodule Feedistiller.CLI.Test do
       assert f4.max_simultaneous_downloads == 5
       assert f4.dir == "the-dir"
     end
+  end
+
+  test "parse from full options" do
+    options = [ "--max-download", "14", "--destination", "destination", "--max", "15", "--name", "ALL", "--timeout", "40",
+                "--feed-url", "url-1", "--max", "3", "--max-download", "2", "--user", "Bilbo", "--password", "SauronSux", "--name", "Le super podcast",
+                "--group", "--destination", "destination-group",
+                "--feed-url", "url-2", "--destination", "destination-2", "--filter-content-type", "^audio", "--max", "unlimited", "--only-new",
+                "--feed-url", "url-3", "--filter-name", "foo", "--min-date", "2015-12-12 12:12:12", "--filter-name", "bar", "--max-date", "2015-12-13 13:13:13", "--clean",
+                "--group", "--max-download", "5",
+                "--feed-url", "url-4", "--dir", "the-dir"
+              ]
+    parse_some_options(options)
+  end
+
+  test "parse from yaml config" do
+    options = [ "--config", "test/data/feeds.yaml" ]
+    parse_some_options(options)
   end
 
   defp get_feed_data do
@@ -112,7 +119,7 @@ defmodule Feedistiller.CLI.Test do
 
   setup do
     Feedistiller.Reporter.reset()
-    on_exit(nil, fn -> 
+    on_exit(nil, fn ->
       File.rm_rf!("tmp")
     end)
   end
@@ -160,7 +167,7 @@ defmodule Feedistiller.CLI.Test do
     assert File.exists?(f1)
     assert File.exists?(f2)
     assert File.exists?(f3)
-    
+
     args = ["--destination", "tmp", "--feed-url", "feed_url", "--name",  "test", "--clean"]
     output = ExUnit.CaptureIO.capture_io(fn -> CLI.main(args) end)
 
