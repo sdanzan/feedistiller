@@ -25,7 +25,7 @@ defmodule Feedistiller.Reporter do
   @doc "The stream of download events"
   @spec stream() :: GenStage.Stream.t
   def stream, do: GenStage.stream([{Feedistiller.Reporter, max_demand: 1}])
-  
+
   @doc "Notify an event for the reporter to broadcast"
   @spec notify(Feedistiller.Event.t) :: :ok
   def notify(event) do
@@ -40,7 +40,7 @@ defmodule Feedistiller.Reporter do
   end
 
   def initial_state() do
-    %{errors: 0, download: 0, total_bytes: 0, download_successful: 0, deleted: 0} 
+    %{errors: 0, download: 0, total_bytes: 0, download_successful: 0, deleted: 0}
   end
 
   def reset() do
@@ -70,7 +70,7 @@ defmodule Feedistiller.Reporter do
   def handle_demand(_demand, state) do
     {:noreply, [], state}
   end
-  
+
   defmodule Reported do
     @moduledoc "Agent storing state for what has happened"
     use Agent
@@ -79,10 +79,10 @@ defmodule Feedistiller.Reporter do
       Agent.start_link(&Feedistiller.Reporter.initial_state/0, name: __MODULE__)
     end
   end
-  
+
   defmodule StreamToReported do
     @moduledoc "A process forwarding events to the `Feedistiller.Reporter.Reported` Agent."
-    
+
     def child_spec(_arg) do
       %{
         id: StreamToReported,
@@ -99,8 +99,8 @@ defmodule Feedistiller.Reporter do
             {:begin, _filename} ->
               Agent.cast(Reported, fn state -> %{state | download: state.download + 1} end)
             {:finish_write, _filename, written, _time} ->
-              Agent.cast(Reported, fn state -> 
-                state = %{state | 
+              Agent.cast(Reported, fn state ->
+                state = %{state |
                   download_successful: state.download_successful + 1,
                   total_bytes: state.total_bytes + written
                 }
@@ -111,8 +111,8 @@ defmodule Feedistiller.Reporter do
                 end
               end)
             {:error_write, _filename, _exception} ->
-              Agent.cast(Reported, fn state -> 
-                %{state | 
+              Agent.cast(Reported, fn state ->
+                %{state |
                   errors: state.errors + 1
                 }
               end)
@@ -160,31 +160,32 @@ defmodule Feedistiller.Reporter do
       {:end_feed, time} -> log_info.("Finished downloading feed #{feed.name} (#{tformat(time)})\n")
       {:end_enclosures, time} -> log_info.("Finished downloading enclosures for #{feed.name} (#{tformat(time)})\n")
       {:begin, filename} ->
-        log_info.("Starting download for `#{entry.title}`")
-        log_info.("Updated: #{dformat(entry.updated)}")
-        log_info.("URL: #{entry.enclosure.url}")
-        log_info.("Destination: `#{destination}`")
-        log_info.("Saving to: `#{Path.basename(filename)}`")
-        log_info.("Expected size: #{entry.enclosure.size}\n")
+        log_info.("[#{feed.name}] Starting download for `#{entry.title}`")
+        log_info.("[#{feed.name}] Updated: #{dformat(entry.updated)}")
+        log_info.("[#{feed.name}] Id: #{entry.id}")
+        log_info.("[#{feed.name}] URL: #{entry.enclosure.url}")
+        log_info.("[#{feed.name}] Destination: `#{destination}`")
+        log_info.("[#{feed.name}] Saving to: `#{Path.basename(filename)}`")
+        log_info.("[#{feed.name}] Expected size: #{entry.enclosure.size}\n")
       {:finish_write, _filename, written, time} ->
-        log_info.("Download finished for `#{entry.title}`")
+        log_info.("[#{feed.name}] Download finished for `#{entry.title}`")
         expected = entry.enclosure.size
         if expected == written do
-          log_info.("Total bytes: #{expected}")
+          log_info.("[#{feed.name}] Total bytes: #{expected}")
         else
-          log_error.("Total bytes: #{written}, expected: #{expected}")
+          log_error.("[#{feed.name}] Total bytes: #{written}, expected: #{expected}")
         end
-        log_info.("Total time: #{tformat(time)}\n")
+        log_info.("[#{feed.name}] Total time: #{tformat(time)}\n")
       {:error_write, filename, exception} ->
-        log_error.("Error while writing to `#{Path.basename(filename)}` (complete path: `#{filename}`)")
-        log_error.("Exception: #{inspect exception}")
+        log_error.("[#{feed.name}] Error while writing to `#{Path.basename(filename)}` (complete path: `#{filename}`)")
+        log_error.("[#{feed.name}] Exception: #{inspect exception}")
       {:error_destination, destination} -> log_error.("Destination unavailable: `#{destination}`")
-      :bad_url -> log_error.("Feed unavailable at #{feed.url}")
-      :bad_feed -> log_error.("Incomplete feed at #{feed.url}")
+      :bad_url -> log_error.("[#{feed.name}] Feed unavailable at #{feed.url}")
+      :bad_feed -> log_error.("[#{feed.name}] Incomplete feed at #{feed.url}")
       :begin_clean -> log_info.("Starting cleaning for #{feed.name}")
       :end_clean -> log_info.("Ending cleaning for #{feed.name}")
-      {:clean, file} -> log_info.("Deleting file '#{file}'")
-      {:bad_clean, file} -> log_info.("Error deleting file '#{file}'")
+      {:clean, file} -> log_info.("[#{feed.name}] Deleting file '#{file}'")
+      {:bad_clean, file} -> log_info.("[#{feed.name}] Error deleting file '#{file}'")
       _ -> nil
     end
   end

@@ -18,11 +18,11 @@ defmodule Feedistiller.Limits do
 
   - `from:` only items newer than this date are retrieved (default is `:oldest` for no limit)
   - `to:` only items older than this date are retrieved (default is `:latest` for not limit)
-  - `max:` maximum number of items to retrieve (default is `:unlimited` for no limit) 
+  - `max:` maximum number of items to retrieve (default is `:unlimited` for no limit)
   """
 
   defstruct from: :oldest, to: :latest, max: :unlimited
-  @type t :: %__MODULE__{from: Timex.DateTime.t | :oldest, to: Timex.DateTime.t | :latest, max: integer | :unlimited}
+  @type t :: %__MODULE__{from: DateTime.t | :oldest, to: DateTime.t | :latest, max: integer | :unlimited}
 end
 
 defmodule Feedistiller.Filters do
@@ -79,25 +79,25 @@ defmodule Feedistiller.Util do
   end
   def tformat(_), do: ""
 
-  def dformat(date = %DateTime{}), do: Timex.format!(date, "%Y-%m-%d", :strftime)
+  def dformat(date = %DateTime{}), do: Calendar.strftime(date, "%Y-%m-%d")
   def dformat(nil), do: "????-??-??"
 end
 
 defmodule Feedistiller do
   @moduledoc """
   Provides functions to downloads enclosures of rss/atom feeds.
-  
+
   Features:
   - download multiple feeds at once and limit the number of downloads
     occurring at the same (globally or on per feed basis).
   - various filtering options:
     - content-type criteria
     - item name criteria
-    - item date criteria  
-  
+    - item date criteria
+
   `HTTPoison` must be started to use `Feedistiller` functions.
   """
-  
+
   alias Feedistiller.FeedAttributes
   alias Feedistiller.Event
   alias Feedistiller.Http
@@ -112,7 +112,7 @@ defmodule Feedistiller do
   do
     download_feeds(feeds, nil)
   end
-  
+
   @doc """
   Download a set of feeds according to their settings, with `max` simultaneous
   downloads at the same time across all feeds.
@@ -129,14 +129,14 @@ defmodule Feedistiller do
   def download_feeds(feeds, semaphore)
   when is_list(feeds) and (is_map(semaphore) or is_nil(semaphore))
   do
-    feeds 
+    feeds
     |> Enum.map(&Task.async(fn -> download_feed(&1, semaphore) end))
     |> Enum.each(&Task.await(&1, :infinity))
   end
-  
+
   @doc ~S"""
   Download enclosures of the given `feed` according to its settings.
-  
+
   Attributes of the feed are:
   - `url:` the url of the feed. Redirect are auto followed.
   - `destination:` path for the downloaded files. Files are put in a subdirectory
@@ -189,7 +189,7 @@ defmodule Feedistiller do
 
       # Parse the feed and filter/stream it to the entry queue
       spawn(fn -> generate_entries_stream(entriesq, chunksq, feed, filters) end)
-      
+
       # and get all!
       get_enclosures(entries, destination, feed, semaphores)
 
@@ -228,8 +228,10 @@ defmodule Feedistiller do
     release(sem)
   end
 
+  defp measure(f), do: Timex.Duration.measure(f)
+
   defp generate_chunks_stream(chunks, feed, semaphores) do
-    {t, _} = Timex.Duration.measure(fn ->
+    {t, _} = measure(fn ->
       try do
         acquire(semaphores)
         Feedistiller.Reporter.notify(%Event{feed: feed, event: :begin_feed})
@@ -261,11 +263,12 @@ defmodule Feedistiller do
         [
           event_state: {entries, 0},
           event_fun: fn
-            (entry = %Feeder.Entry{}, {entries, count}) -> 
+            (entry = %Feeder.Entry{}, {entries, count}) ->
               if count < max && match_filters(entry, filters) do
                 BlockingQueue.enqueue(entries, entry)
                 {entries, count + 1}
               else
+                Feedistiller.Reporter.notify(%Event{feed: feed, entry: entry, event: {:ignored}})
                 {entries, count}
               end
             (channel = %Feeder.Feed{}, state) ->
@@ -296,9 +299,10 @@ defmodule Feedistiller do
   defp filter_feed_entry(entry, dates) do
     case dates do
       {:oldest, :latest} -> true
-      {:oldest, to} -> Timex.compare(entry.updated, to) <= 0
-      {from, :latest} -> Timex.compare(entry.updated, from) >= 0
-      {from, to} -> Timex.compare(entry.updated, to) <= 0 and Timex.compare(entry.updated, from) >= 0
+      {:oldest, to} -> DateTime.compare(entry.updated, to) in [:lt, :eq]
+      {from, :latest} -> DateTime.compare(entry.updated, from) in [:gt, :eq]
+      {from, to} ->
+        DateTime.compare(entry.updated, to) in [:lt, :eq] and DateTime.compare(entry.updated, from) in [:gt, :eq]
     end
   end
 
@@ -307,7 +311,7 @@ defmodule Feedistiller do
       if(!is_nil(unquote(s)), do: Alambic.Semaphore.acquire(unquote(s)))
     end
   end
-  
+
   defmacrop sem_release(s) do
     quote do
       if(!is_nil(unquote(s)), do: Alambic.Semaphore.release(unquote(s)))
@@ -333,11 +337,11 @@ defmodule Feedistiller do
   end
 
   defp filename(entry = %Feeder.Entry{}, destination) do
-    filename(entry.title, destination) <> Path.extname(entry.enclosure.url)
+    filename(entry.title, destination) <> Path.extname(URI.parse(entry.enclosure.url).path)
   end
 
   defp filename(entry, destination) do
-    title = String.replace(entry, ~r/\*|<|>|\/|\\|\||"/, "_")
+    title = String.replace(entry, ~r/\*|<|>|\/|\\|\||"|:/, "_")
     title = String.replace(title, "&", "-")
     title = String.replace(title, "?", "")
     title = String.trim(title)
@@ -348,9 +352,14 @@ defmodule Feedistiller do
   defp get_enclosure(entry, destination, feed, semaphores, countdown) do
     acquire(semaphores)
     CountDown.increase(countdown)
-    spawn_link(fn -> 
+    spawn_link(fn ->
       filename = filename(entry, destination)
-      Feedistiller.Reporter.notify(%Event{feed: feed, destination: destination, entry: entry, event: {:begin, filename}})
+      Feedistiller.Reporter.notify(%Event{
+        feed: feed,
+        destination: destination,
+        entry: entry,
+        event: {:begin, filename}
+      })
       get_enclosure(filename, entry, feed)
       CountDown.signal(countdown)
       release(semaphores)
@@ -366,7 +375,7 @@ defmodule Feedistiller do
     case File.open(tmp_filename, [:write]) do
       {:ok, file} ->
         try do
-          {time, {:ok, {written, _}}} = Timex.Duration.measure(fn -> Http.stream_get!(
+          {time, {:ok, {written, _}}} = measure(fn -> Http.stream_get!(
             entry.enclosure.url,
             fn chunk, {current_size, current_chunk} ->
               :ok = IO.binwrite(file, chunk)
@@ -397,18 +406,16 @@ defmodule Feedistiller do
 
   # Retrieve all enclosures
   defp get_enclosures(entries, destination, feed, semaphores) do
-    {t, _} = Timex.Duration.measure(fn ->
+    {t, _} = measure(fn ->
       countdown = CountDown.create_link(0)
       # fetch all enclosures, up to 'max' at the same time
-      for entry <- entries do
-        get_enclosure(entry, destination, feed, semaphores, countdown)
-      end
+      Enum.each(entries, fn entry -> get_enclosure(entry, destination, feed, semaphores, countdown) end)
       CountDown.wait(countdown)
       CountDown.destroy(countdown)
     end)
     Feedistiller.Reporter.notify(%Event{feed: feed, event: {:end_enclosures, t}})
   end
-  
+
   defp get_sem(max) do
     case max do
       :unlimited -> nil

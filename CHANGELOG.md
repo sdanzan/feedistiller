@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.2.0
+
+* Elixir x.x+ (switch to standard date functions)
+* `--dir` feed option
+* Support for a YAML config to define feed options (`--config` option)
+
 ## 3.1.1
 
 * Bug fix: ensure all informational events have been flushed before printing final status
