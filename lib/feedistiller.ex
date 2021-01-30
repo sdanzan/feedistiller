@@ -56,10 +56,10 @@ defmodule Feedistiller.FeedAttributes do
 
   defstruct name: "", url: "", filters: %Feedistiller.Filters{}, dir: "",
             destination: ".", max_simultaneous_downloads: 3, user: "", password: "",
-            only_new: false, timeout: 60, clean: false
+            only_new: false, persist_state: false, timeout: 60, clean: false
   @type t :: %__MODULE__{name: String.t, url: String.t, filters: Filters.t, dir: String.t, destination: String.t,
                          max_simultaneous_downloads: :unlimited | integer, user: String.t, password: String.t,
-                         only_new: boolean, timeout: integer, clean: boolean}
+                         only_new: boolean, persist_state: boolean, timeout: integer, clean: boolean}
 end
 
 defmodule Feedistiller.Event do
@@ -105,6 +105,7 @@ defmodule Feedistiller do
   alias Alambic.Semaphore
   alias Alambic.CountDown
   alias Alambic.BlockingQueue
+  alias :crypto, as: Crypto
 
   @doc "Download a set of feeds according to their settings."
   @spec download_feeds(list(FeedAttributes.t)) :: :ok
