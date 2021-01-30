@@ -65,6 +65,8 @@ defmodule Feedistiller.CLI do
                        the required destination.
   --timeout          : timeout in seconds for the http operations. Default to 60s.
   --gui              : show the graphic interface.
+  --persist          : save feed download information on disk.
+  --rebuild          : rebuild download information for saving on disk.
   --clean            : do not download anything, try to remove duplicated files and
                        delete crashed tmp file.
   --group            : following options will be applied to all subsequent feed
@@ -186,61 +188,62 @@ defmodule Feedistiller.CLI do
   end
 
   defp update_feed_attributes_from_yaml(attr, yaml_attr) do
-    Enum.reduce(
-      yaml_attr,
-      attr,
-      fn {key, value}, attr ->
-        case key do
-          "url" -> %{attr | url: value}
-          "destination" -> %{attr | destination: Path.expand(value)}
-          "name" -> %{attr | name: value}
-          "dir" -> %{attr | dir: value}
-          "max_download" ->
-            %{attr | max_simultaneous_downloads: value}
-          "min_date" -> %{
-            attr | filters: %{
-              attr.filters | limits: %{
-                attr.filters.limits | from: parse_date(value)}}}
-          "max_date" -> %{
-            attr | filters: %{
-              attr.filters | limits: %{
-                attr.filters.limits | to: parse_date(value)}}}
-          "max" -> case value do
-            "unlimited" -> %{
-              attr | filters: %{
-                attr.filters | limits: %{
-                  attr.filters.limits | max: :unlimited}}}
-            max when is_integer(max) -> %{
-              attr | filters: %{
-                attr.filters | limits: %{attr.filters.limits | max: max}}}
-          end
-          "filter_content_type" when is_binary(value) -> %{
-            attr | filters: %{
-              attr.filters | mime: [Regex.compile!(value) | attr.filters.mime]}}
-          "filter_content_type" when is_list(value) -> %{
-            attr | filters: %{
-              attr.filters | mime:
-                for f <- value do Regex.compile!(f) end ++ attr.filters.mime
-            }
-          }
-          "filter_name" when is_binary(value) -> %{
-            attr | filters: %{
-              attr.filters | name: [Regex.compile!(value) | attr.filters.name]}}
-          "filter_name" when is_list(value) -> %{
-            attr | filters: %{
-              attr.filters | name:
-                for f <- value do Regex.compile!(f) end ++ attr.filters.name
-            }
-          }
-          "user" -> %{attr | user: value}
-          "password" -> %{attr | password: value}
-          "clean" when is_boolean(value) -> %{attr | clean: value}
-          "only_new" when is_boolean(value) -> %{attr | only_new: value}
-          "timeout" when is_integer(value)-> %{attr | timeout: value}
-          _ -> attr
-        end
+    Enum.reduce(yaml_attr, attr, &update_attribute_from_option/2)
+  end
+
+  defp update_attribute_from_option({key, value}, attr) do
+    case key do
+      "url" -> %{attr | url: value}
+      "destination" -> %{attr | destination: Path.expand(value)}
+      "name" -> %{attr | name: value}
+      "dir" -> %{attr | dir: value}
+      "max_download" ->
+        %{attr | max_simultaneous_downloads: value}
+      "min_date" -> %{
+        attr | filters: %{
+          attr.filters | limits: %{
+            attr.filters.limits | from: parse_date(value)}}}
+      "max_date" -> %{
+        attr | filters: %{
+          attr.filters | limits: %{
+            attr.filters.limits | to: parse_date(value)}}}
+      "max" -> case value do
+        "unlimited" -> %{
+          attr | filters: %{
+            attr.filters | limits: %{attr.filters.limits | max: :unlimited}}}
+        max when is_integer(max) -> %{
+          attr | filters: %{
+            attr.filters | limits: %{attr.filters.limits | max: max}}}
+        max when is_binary(max) -> %{
+          attr | filters: %{
+            attr.filters | limits: %{attr.filters.limits | max: String.to_integer(max)}}}
       end
-    )
+      "filter_content_type" when is_binary(value) -> %{
+        attr | filters: %{
+          attr.filters | mime: [Regex.compile!(value) | attr.filters.mime]}}
+      "filter_content_type" when is_list(value) -> %{
+        attr | filters: %{
+          attr.filters | mime:
+            for f <- value do Regex.compile!(f) end ++ attr.filters.mime
+        }
+      }
+      "filter_name" when is_binary(value) -> %{
+        attr | filters: %{
+          attr.filters | name: [Regex.compile!(value) | attr.filters.name]}}
+      "filter_name" when is_list(value) -> %{
+        attr | filters: %{
+          attr.filters | name:
+            for f <- value do Regex.compile!(f) end ++ attr.filters.name
+        }
+      }
+      "user" -> %{attr | user: value}
+      "password" -> %{attr | password: value}
+      "clean" when is_boolean(value) -> %{attr | clean: value}
+      "only_new" when is_boolean(value) -> %{attr | only_new: value}
+      "persist" when is_boolean(value) -> %{attr | persist_state: value}
+      "timeout" when is_integer(value)-> %{attr | timeout: value}
+      _ -> attr
+    end
   end
 
   defp parse_feeds_config([], _, _, feeds), do: feeds
@@ -278,36 +281,7 @@ defmodule Feedistiller.CLI do
 
   defp parse_feed_attributes({[option | left_options], attr}, is_group) do
     attributes = case option do
-      {:destination, destination} ->
-        %{attr | destination: Path.expand(destination)}
-      {:name, name} ->
-        %{attr | name: name}
-      {:dir, dir} ->
-        %{attr | dir: dir}
-      {:max_download, max} ->
-        %{attr | max_simultaneous_downloads: String.to_integer(max)}
-      {:min_date, date} ->
-        %{attr | filters: %{attr.filters | limits: %{attr.filters.limits | from: parse_date(date)}}}
-      {:max_date, date} ->
-        %{attr | filters: %{attr.filters | limits: %{attr.filters.limits | to: parse_date(date)}}}
-      {:max, "unlimited"} ->
-        %{attr | filters: %{attr.filters | limits: %{attr.filters.limits | max: :unlimited}}}
-      {:max, max} ->
-        %{attr | filters: %{attr.filters | limits: %{attr.filters.limits | max: String.to_integer(max)}}}
-      {:filter_content_type, filter} ->
-        %{attr | filters: %{attr.filters | mime: [Regex.compile!(filter) | attr.filters.mime]}}
-      {:filter_name, filter} ->
-        %{attr | filters: %{attr.filters | name: [Regex.compile!(filter) | attr.filters.name]}}
-      {:user, user} ->
-        %{attr | user: user}
-      {:password, password} ->
-        %{attr | password: password}
-      {:clean, clean} ->
-        %{attr | clean: clean}
-      {:only_new, only_new} ->
-        %{attr | only_new: only_new}
-      {:timeout, timeout} ->
-        %{attr | timeout: timeout}
+      {key, value} -> update_attribute_from_option({Atom.to_string(key), value}, attr)
       _ -> attr
     end
     parse_feed_attributes({left_options, attributes}, is_group)
@@ -329,7 +303,7 @@ defmodule Feedistiller.CLI do
       dir: :keep,
       destination: :keep,
       feed_url: :keep,
-      max_download: :keep,
+      max_download: [:integer, :keep],
       min_date: :keep,
       max_date: :keep,
       max: :keep,
@@ -341,6 +315,7 @@ defmodule Feedistiller.CLI do
       gui: :boolean,
       clean: [:boolean, :keep],
       only_new: [:boolean, :keep],
+      persist: [:boolean, :keep],
       group: [:boolean, :keep],
       timeout: [:integer, :keep],
     ]
